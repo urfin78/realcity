@@ -100,6 +100,12 @@ jobs:
           cp -r /tmp/deploy/* .
           touch .nojekyll   # verhindert Jekyll-Verarbeitung der src/-Dateien
 
+          # Versionsinfo für die In-Game-Anzeige erzeugen
+          printf '{"version":"%s","commit":"%s","date":"%s"}\n' \
+            "${{ steps.version.outputs.tag }}" \
+            "${GITHUB_SHA:0:7}" \
+            "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > version.json
+
           git add -A
           git diff --staged --quiet || git commit -m "deploy: ${{ steps.version.outputs.tag }}"
           git push origin gh-pages
