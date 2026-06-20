@@ -321,4 +321,21 @@ canvas.addEventListener('touchmove', e => {
 }, { passive: true });
 canvas.addEventListener('touchend', () => { lastTouch = null; });
 
+// --- Versionsanzeige ---
+// version.json wird beim Release auf gh-pages erzeugt; lokal liegt ein
+// "dev"-Platzhalter. Best effort — fehlt die Datei, bleibt "RealCity" stehen.
+(async function showVersion() {
+  const el = document.getElementById('version');
+  if (!el) return;
+  try {
+    const r = await fetch('version.json', { cache: 'no-store' });
+    if (!r.ok) return;
+    const v = await r.json();
+    el.textContent = `RealCity ${v.version || 'dev'}`;
+    if (v.commit && v.commit !== 'local') el.title = `Commit ${v.commit} · ${v.date || ''}`;
+  } catch {
+    /* offline / file:// — Anzeige bleibt beim Standard */
+  }
+})();
+
 draw();
