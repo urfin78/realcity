@@ -38,7 +38,7 @@ jobs:
           exit $fail
 
       - name: Unit-Tests (node:test)
-        run: node --test tests/
+        run: node --test 'tests/**/*.test.mjs'
 
   python:
     name: Python-Tool prüfen

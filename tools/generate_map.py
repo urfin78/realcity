@@ -18,7 +18,6 @@ import json
 import struct
 import zipfile
 import math
-import time
 import requests
 
 # --- Konfiguration ---
@@ -79,8 +78,6 @@ def read_srtm_tif(tif_path, min_lat, max_lat, min_lon, max_lon, grid):
     Gibt ein grid×grid Array zurück.
     """
     try:
-        import struct as st
-
         # GeoTIFF minimal parsen — CGIAR SRTM ist immer 6000×6000, Int16, 5°×5°
         # Kachel-Bounds aus dem Dateinamen ableiten
         base = os.path.basename(tif_path).replace('.tif', '')
@@ -151,9 +148,6 @@ def _sample_tif_raw(tif_path, tile_lat_min, tile_lat_max, tile_lon_min, tile_lon
                     f.seek(ptr)
                     strip_offsets = list(struct.unpack(bo + f'{count}I', f.read(4*count)))
                     f.seek(pos)
-            elif tag == 279:  # StripByteCounts
-                if count == 1:
-                    strip_bytecounts = [struct.unpack(bo + 'I', value_raw)[0]]
 
         if not strip_offsets:
             raise RuntimeError("Konnte TIFF-Offset nicht lesen")
