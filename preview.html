@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <title>Terrain Preview</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #111; color: #eee; font-family: sans-serif; padding: 20px; }
+    h2 { margin-bottom: 10px; font-size: 16px; opacity: 0.7; }
+    .row { display: flex; gap: 20px; flex-wrap: wrap; }
+    .panel { background: #1e1e1e; border-radius: 8px; padding: 16px; }
+    canvas { display: block; image-rendering: pixelated; }
+    #status { margin: 12px 0; font-size: 13px; opacity: 0.6; min-height: 20px; }
+    .legend { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; font-size: 12px; }
+    .legend-item { display: flex; align-items: center; gap: 5px; }
+    .legend-swatch { width: 16px; height: 16px; border-radius: 3px; }
+    select, button { background: #333; color: #eee; border: 1px solid #555; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 14px; }
+    button { background: #2a6db5; border-color: #2a6db5; }
+    button:disabled { opacity: 0.5; cursor: default; }
+    .controls { margin-bottom: 16px; display: flex; gap: 10px; align-items: center; }
+    .label { font-size: 13px; opacity: 0.6; margin-bottom: 6px; }
+  </style>
+</head>
+<body>
+
+<div class="controls">
+  <select id="city">
+    <option value="dresden">Dresden</option>
+    <option value="hamburg">Hamburg</option>
+    <option value="münchen">München</option>
+    <option value="leipzig">Leipzig</option>
+  </select>
+  <button id="loadBtn">Laden</button>
+  <span style="font-size:12px;opacity:0.5">Karte fehlt? → python3 tools/generate_map.py &lt;Name&gt; &lt;lat&gt; &lt;lon&gt;</span>
+</div>
+<div id="status">Klicke auf "Laden"...</div>
+
+<div class="row">
+  <div class="panel">
+    <div class="label">1 — Rohe Höhendaten (32×32 Punkte)</div>
+    <canvas id="c1" width="320" height="320"></canvas>
+  </div>
+  <div class="panel">
+    <div class="label">2 — Geglättet (Gauss-Filter)</div>
+    <canvas id="c2" width="320" height="320"></canvas>
+  </div>
+  <div class="panel">
+    <div class="label">3 — Terrain-Typen + OSM Wasser/Wald</div>
+    <canvas id="c3" width="320" height="320"></canvas>
+    <div class="legend">
+      <div class="legend-item"><div class="legend-swatch" style="background:#aac8f0"></div>Wasser</div>
+      <div class="legend-item"><div class="legend-swatch" style="background:#5a9a50"></div>Wald</div>
+      <div class="legend-item"><div class="legend-swatch" style="background:#b8d48a"></div>Flachland</div>
+      <div class="legend-item"><div class="legend-swatch" style="background:#c8b870"></div>Hügel</div>
+      <div class="legend-item"><div class="legend-swatch" style="background:#a89070"></div>Steilhang</div>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="label">4 — Spielraster (wie es im Spiel aussähe)</div>
+    <canvas id="c4" width="320" height="320"></canvas>
+  </div>
+</div>
+
+<script type="module">
+const GRID = 10;
+const AREA = 0.09; // ~10km Radius
+
+async function loadElevation(centerLat, centerLon) {
+  // 16×16 = 256 Punkte, ein einziger Request
+  const lats = [], lons = [];
+  for (let row = 0; row < GRID; row++) {
+    for (let col = 0; col < GRID; col++) {
+      lats.push((centerLat + AREA  - (row / (GRID-1)) * AREA * 2).toFixed(5));
+      lons.push((centerLon - AREA*1.4 + (col / (GRID-1)) * AREA * 2.8).toFixed(5));
+    }
+  }
+
+  const res = await fetch(`https://api.open-meteo.com/v1/elevation?latitude=${lats.join(',')}&longitude=${lons.join(',')}`);
+  const data = await res.json();
+  if (data.error) throw new Error(`Elevation API: ${data.reason}`);
+  return data.elevation; // 256 Werte, row-major
+}
+
+async function loadOSM(centerLat, centerLon) {
+  const d = AREA;
+  const b = `${centerLat-d},${centerLon-d*1.4},${centerLat+d},${centerLon+d*1.4}`;
+  const query = `[out:json][timeout:30];(way["natural"="water"](${b});way["waterway"="river"](${b});way["natural"="wood"](${b});way["landuse"="forest"](${b});relation["natural"="water"](${b});relation["natural"="wood"](${b});relation["landuse"="forest"](${b}););out geom;`;
+  const res = await fetch('https://overpass-api.de/api/interpreter', {
+    method: 'POST',
+    body: 'data=' + encodeURIComponent(query),
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+  });
+  const data = await res.json();
+  return data.elements || [];
+}
+
+function gauss(grid, w, h, sigma = 2) {
+  const out = new Float32Array(w * h);
+  const r = Math.ceil(sigma * 2);
+  const kernel = [];
+  let sum = 0;
+  for (let i = -r; i <= r; i++) {
+    const v = Math.exp(-(i*i) / (2*sigma*sigma));
+    kernel.push(v); sum += v;
+  }
+  kernel.forEach((v, i, a) => a[i] = v / sum);
+
+  // Horizontal
+  const tmp = new Float32Array(w * h);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      let val = 0;
+      kernel.forEach((k, ki) => {
+        const xi = Math.max(0, Math.min(w-1, x + ki - r));
+        val += k * grid[y * w + xi];
+      });
+      tmp[y * w + x] = val;
+    }
+  }
+  // Vertical
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      let val = 0;
+      kernel.forEach((k, ki) => {
+        const yi = Math.max(0, Math.min(h-1, y + ki - r));
+        val += k * tmp[yi * w + x];
+      });
+      out[y * w + x] = val;
+    }
+  }
+  return out;
+}
+
+function drawHeightmap(canvas, elev, minE, maxE) {
+  const ctx = canvas.getContext('2d');
+  const cw = canvas.width, ch = canvas.height;
+  const cellW = cw / GRID, cellH = ch / GRID;
+  const range = maxE - minE || 1;
+  for (let row = 0; row < GRID; row++) {
+    for (let col = 0; col < GRID; col++) {
+      const t = (elev[row * GRID + col] - minE) / range;
+      const v = Math.round(t * 255);
+      ctx.fillStyle = `rgb(${v},${v},${v})`;
+      ctx.fillRect(col * cellW, row * cellH, cellW + 1, cellH + 1);
+    }
+  }
+}
+
+function osmToGrid(elements, centerLat, centerLon) {
+  // Rasterisiert OSM-Polygone in GRID×GRID Boolean-Grids
+  const water  = new Uint8Array(GRID * GRID);
+  const forest = new Uint8Array(GRID * GRID);
+
+  function geoToCell(lat, lon) {
+    const col = Math.round(((lon - (centerLon - AREA*1.4)) / (AREA*2.8)) * (GRID-1));
+    const row = Math.round(((centerLat + AREA - lat)       / (AREA*2))   * (GRID-1));
+    return { col: Math.max(0,Math.min(GRID-1,col)), row: Math.max(0,Math.min(GRID-1,row)) };
+  }
+
+  function rasterizePoly(coords, target) {
+    if (!coords || coords.length < 3) return;
+    // Bounding box
+    let minC=GRID,maxC=0,minR=GRID,maxR=0;
+    const pts = coords.map(({lat,lon}) => {
+      const c = geoToCell(lat,lon);
+      minC=Math.min(minC,c.col); maxC=Math.max(maxC,c.col);
+      minR=Math.min(minR,c.row); maxR=Math.max(maxR,c.row);
+      return c;
+    });
+    for (let r=minR; r<=maxR; r++) {
+      for (let c=minC; c<=maxC; c++) {
+        if (pointInPoly(c+.5, r+.5, pts)) target[r*GRID+c] = 1;
+      }
+    }
+    // Fallback: linie
+    if (pts.every((_,i) => !target[pts[i].row*GRID+pts[i].col])) {
+      pts.forEach(p => { target[p.row*GRID+p.col] = 1; });
+    }
+  }
+
+  function pointInPoly(px, py, poly) {
+    let inside = false;
+    for (let i=0, j=poly.length-1; i<poly.length; j=i++) {
+      const {col:xi,row:yi}=poly[i], {col:xj,row:yj}=poly[j];
+      if (((yi>py)!==(yj>py)) && (px < (xj-xi)*(py-yi)/(yj-yi)+xi)) inside=!inside;
+    }
+    return inside;
+  }
+
+  for (const el of elements) {
+    const isWater  = el.tags?.natural==='water' || el.tags?.waterway==='river';
+    const isForest = el.tags?.natural==='wood'  || el.tags?.landuse==='forest';
+    const target   = isWater ? water : isForest ? forest : null;
+    if (!target) continue;
+
+    if (el.type==='way' && el.geometry) {
+      rasterizePoly(el.geometry.map(g=>({lat:g.lat,lon:g.lon})), target);
+    }
+    if (el.type==='relation' && el.members) {
+      for (const m of el.members) {
+        if (m.role==='outer' && m.geometry) {
+          rasterizePoly(m.geometry.map(g=>({lat:g.lat,lon:g.lon})), target);
+        }
+      }
+    }
+  }
+  return { water, forest };
+}
+
+function drawTerrain(canvas, elev, water, forest, minE, maxE) {
+  const ctx = canvas.getContext('2d');
+  const cw = canvas.width, ch = canvas.height;
+  const cellW = cw / GRID, cellH = ch / GRID;
+  const range = maxE - minE || 1;
+
+  for (let row = 0; row < GRID; row++) {
+    for (let col = 0; col < GRID; col++) {
+      const i = row * GRID + col;
+      const t = (elev[i] - minE) / range;
+      let color;
+      if (water[i])        color = '#aac8f0';
+      else if (forest[i])  color = '#5a9a50';
+      else if (t < 0.15)   color = '#b0c890'; // Niederung
+      else if (t < 0.4)    color = '#b8d48a'; // Flachland
+      else if (t < 0.65)   color = '#c8b870'; // Hügel
+      else                 color = '#a89070'; // Steilhang
+      ctx.fillStyle = color;
+      ctx.fillRect(col * cellW, row * cellH, cellW + 1, cellH + 1);
+    }
+  }
+}
+
+function drawGameGrid(canvas, elev, water, forest, minE, maxE) {
+  const ctx = canvas.getContext('2d');
+  const cw = canvas.width, ch = canvas.height;
+
+  // Erstmal Terrain zeichnen
+  drawTerrain(canvas, elev, water, forest, minE, maxE);
+
+  // Spielraster darüber (8×8 große Felder)
+  const GAME_GRID = 8;
+  const fw = cw / GAME_GRID, fh = ch / GAME_GRID;
+  const cellsPerField = GRID / GAME_GRID;
+
+  for (let gy = 0; gy < GAME_GRID; gy++) {
+    for (let gx = 0; gx < GAME_GRID; gx++) {
+      // Dominanten Typ im Feld bestimmen
+      let wCount = 0, fCount = 0, total = 0;
+      for (let dy = 0; dy < cellsPerField; dy++) {
+        for (let dx = 0; dx < cellsPerField; dx++) {
+          const row = gy * cellsPerField + dy;
+          const col = gx * cellsPerField + dx;
+          const i = row * GRID + col;
+          wCount += water[i];
+          fCount += forest[i];
+          total++;
+        }
+      }
+      const px = gx * fw, py = gy * fh;
+      // Raster-Linie
+      ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(px + 0.75, py + 0.75, fw - 1.5, fh - 1.5);
+
+      // Typ-Icon
+      ctx.font = `${fw * 0.35}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      const label = wCount/total > 0.3 ? '🌊' : fCount/total > 0.3 ? '🌲' : '';
+      if (label) ctx.fillText(label, px + fw/2, py + fh/2);
+    }
+  }
+}
+
+async function run() {
+  const btn = document.getElementById('loadBtn');
+  const statusEl = document.getElementById('status');
+  const cityKey = document.getElementById('city').value;
+
+  btn.disabled = true;
+  try {
+    statusEl.textContent = `Lade maps/${cityKey}.json...`;
+    const res = await fetch(`maps/${cityKey}.json`);
+    if (!res.ok) throw new Error(`maps/${cityKey}.json nicht gefunden — bitte zuerst generate_map.py ausführen`);
+    const map = await res.json();
+
+    const GRID = map.grid;
+    const elevRaw = map.elevation; // bereits 0.0–1.0 normalisiert
+    const water  = map.water;
+    const forest = map.forest;
+    const minE = 0; const maxE = 1;
+
+    // Panel 1: Roh-Höhenkarte
+    drawHeightmapN(document.getElementById('c1'), elevRaw, minE, maxE, GRID);
+
+    // Panel 2: Geglättet
+    const elevSmooth = gauss(new Float32Array(elevRaw), GRID, GRID, 1.5);
+    drawHeightmapN(document.getElementById('c2'), elevSmooth, minE, maxE, GRID);
+
+    // Panel 3: Terrain-Typen
+    drawTerrainN(document.getElementById('c3'), elevSmooth, water, forest, minE, maxE, GRID);
+
+    // Panel 4: Spielraster
+    drawGameGridN(document.getElementById('c4'), elevSmooth, water, forest, minE, maxE, GRID);
+
+    statusEl.textContent = `${map.name} — ${map.areakm}km², Höhe ${minE}m–${maxE}m, ${GRID}×${GRID} Felder`;
+  } catch(e) {
+    statusEl.textContent = `Fehler: ${e.message}`;
+    console.error(e);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// GRID-parametrisierte Varianten der Zeichenfunktionen
+function drawHeightmapN(canvas, elev, minE, maxE, grid) {
+  const ctx = canvas.getContext('2d');
+  const cw = canvas.width, ch = canvas.height;
+  const cellW = cw/grid, cellH = ch/grid;
+  const range = maxE - minE || 1;
+  for (let r=0; r<grid; r++) for (let c=0; c<grid; c++) {
+    const t = (elev[r*grid+c] - minE) / range;
+    const v = Math.round(t*255);
+    ctx.fillStyle = `rgb(${v},${v},${v})`;
+    ctx.fillRect(c*cellW, r*cellH, cellW+1, cellH+1);
+  }
+}
+
+function sampleBilinear(data, grid, fx, fy) {
+  // fx, fy in [0, grid-1] als float
+  const x0 = Math.floor(fx), y0 = Math.floor(fy);
+  const x1 = Math.min(x0+1, grid-1), y1 = Math.min(y0+1, grid-1);
+  const tx = fx - x0, ty = fy - y0;
+  return (1-tx)*(1-ty)*data[y0*grid+x0] + tx*(1-ty)*data[y0*grid+x1]
+       + (1-tx)*ty   *data[y1*grid+x0] + tx*ty   *data[y1*grid+x1];
+}
+
+function sampleNearest(data, grid, fx, fy) {
+  const x = Math.round(Math.max(0, Math.min(grid-1, fx)));
+  const y = Math.round(Math.max(0, Math.min(grid-1, fy)));
+  return data[y*grid+x];
+}
+
+function sampleAny(data, grid, fx, fy, radius=1) {
+  // Gibt 1 zurück wenn irgendein Nachbar im Radius gesetzt ist
+  for (let dy=-radius; dy<=radius; dy++) for (let dx=-radius; dx<=radius; dx++) {
+    if (sampleNearest(data, grid, fx+dx, fy+dy)) return 1;
+  }
+  return 0;
+}
+
+function terrainTypeAt(elev, water, forest, grid, fx, fy, waterRadius=1) {
+  const e = sampleBilinear(elev, grid, fx, fy);
+  const w = sampleAny(water,  grid, fx, fy, waterRadius);
+  const f = sampleNearest(forest, grid, fx, fy);
+  if (w) return 'water';
+  if (f) return 'forest';
+  if (e < 0.25) return 'lowland';
+  if (e < 0.55) return 'flatland';
+  if (e < 0.80) return 'hills';
+  return 'steep';
+}
+
+function drawTerrainN(canvas, elev, water, forest, minE, maxE, grid) {
+  const ctx = canvas.getContext('2d');
+  const cw = canvas.width, ch = canvas.height;
+  // Auf 256×256 Sample-Raster zeichnen → weiche Übergänge
+  const SAMPLES = 256;
+  const pw = cw / SAMPLES, ph = ch / SAMPLES;
+  const colors = { water:'#aac8f0', forest:'#5a9a50', lowland:'#b0c890', flatland:'#b8d48a', hills:'#c8b870', steep:'#a89070' };
+  for (let r=0; r<SAMPLES; r++) for (let c=0; c<SAMPLES; c++) {
+    const fx = (c / (SAMPLES-1)) * (grid-1);
+    const fy = (r / (SAMPLES-1)) * (grid-1);
+    const type = terrainTypeAt(elev, water, forest, grid, fx, fy, 1);
+    ctx.fillStyle = colors[type];
+    ctx.fillRect(c*pw, r*ph, pw+1, ph+1);
+  }
+}
+
+function drawGameGridN(canvas, elev, water, forest, minE, maxE, grid) {
+  const ctx = canvas.getContext('2d');
+  const cw = canvas.width, ch = canvas.height;
+  const GAME_GRID = 64; // 64×64 Spielfelder
+  const fw = cw/GAME_GRID, fh = ch/GAME_GRID;
+  const colors = { water:'#aac8f0', forest:'#5a9a50', lowland:'#b0c890', flatland:'#b8d48a', hills:'#c8b870', steep:'#a89070' };
+
+  for (let gy=0; gy<GAME_GRID; gy++) for (let gx=0; gx<GAME_GRID; gx++) {
+    const fx = ((gx + 0.5) / GAME_GRID) * (grid-1);
+    const fy = ((gy + 0.5) / GAME_GRID) * (grid-1);
+    const type = terrainTypeAt(elev, water, forest, grid, fx, fy, 1);
+
+    const px = gx*fw, py = gy*fh;
+    ctx.fillStyle = colors[type];
+    ctx.fillRect(px, py, fw+1, fh+1);
+    ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+    ctx.lineWidth = 0.5;
+    ctx.strokeRect(px, py, fw, fh);
+  }
+}
+
+
+document.getElementById('loadBtn').addEventListener('click', run);
+</script>
+</body>
+</html>

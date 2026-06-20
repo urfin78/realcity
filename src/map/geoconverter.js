@@ -1,4 +1,4 @@
-export const TILE_SIZE = 16; // Pixel pro Tile
+export const TILE_SIZE = 4; // Pixel pro Tile (bei zoom=1.5 → 6px/Tile sichtbar)
 
 /**
  * Konvertiert einen Bereich von Geo-Koordinaten in ein Spielraster.

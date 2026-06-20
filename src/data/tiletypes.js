@@ -8,25 +8,28 @@ export const TileType = {
   PARK:        'park',
   WATER:       'water',
   FOREST:      'forest',
+  WETLAND:     'wetland',
+  FARMLAND:    'farmland',
   RAIL:        'rail',
 };
 
-// Farben für Canvas-Rendering
 export const TileColors = {
-  [TileType.UNKNOWN]:     '#2a2a3a',
-  [TileType.ROAD]:        '#555566',
-  [TileType.BUILDING]:    '#8888aa',
-  [TileType.RESIDENTIAL]: '#7799bb',
-  [TileType.COMMERCIAL]:  '#bb9944',
-  [TileType.INDUSTRIAL]:  '#aa6633',
-  [TileType.PARK]:        '#338844',
-  [TileType.WATER]:       '#2255aa',
-  [TileType.FOREST]:      '#225533',
-  [TileType.RAIL]:        '#444455',
+  [TileType.UNKNOWN]:     '#c8d8a0', // helles Grün als Grundfläche (wie Karte)
+  [TileType.ROAD]:        '#ffffff',
+  [TileType.BUILDING]:    '#d4b483',
+  [TileType.RESIDENTIAL]: '#e8dcc8',
+  [TileType.COMMERCIAL]:  '#f0c88a',
+  [TileType.INDUSTRIAL]:  '#c8aaaa',
+  [TileType.PARK]:        '#a8d878',
+  [TileType.WATER]:       '#aac8f0',
+  [TileType.FOREST]:      '#6aaa60',
+  [TileType.WETLAND]:     '#88b898',
+  [TileType.FARMLAND]:    '#dce8b0',
+  [TileType.RAIL]:        '#888899',
 };
 
 export const TileLabels = {
-  [TileType.UNKNOWN]:     'Unbekannt',
+  [TileType.UNKNOWN]:     'Freifläche',
   [TileType.ROAD]:        'Straße',
   [TileType.BUILDING]:    'Gebäude',
   [TileType.RESIDENTIAL]: 'Wohngebiet',
@@ -35,27 +38,43 @@ export const TileLabels = {
   [TileType.PARK]:        'Park',
   [TileType.WATER]:       'Wasser',
   [TileType.FOREST]:      'Wald',
+  [TileType.WETLAND]:     'Feuchtgebiet',
+  [TileType.FARMLAND]:    'Landwirtschaft',
   [TileType.RAIL]:        'Schiene',
 };
 
-// OSM-Tags → TileType Mapping
+// OSM-Tags → TileType Mapping (Reihenfolge = Priorität)
 export function osmTagsToTileType(tags) {
   if (!tags) return TileType.UNKNOWN;
 
-  if (tags.natural === 'water' || tags.waterway) return TileType.WATER;
+  // Wasser
+  if (tags.natural === 'water' || tags.natural === 'bay' || tags.natural === 'coastline') return TileType.WATER;
+  if (tags.waterway === 'river' || tags.waterway === 'stream' || tags.waterway === 'canal') return TileType.WATER;
+  if (tags.landuse === 'reservoir' || tags.landuse === 'basin') return TileType.WATER;
+
+  // Wald
   if (tags.natural === 'wood' || tags.landuse === 'forest') return TileType.FOREST;
-  if (tags.leisure === 'park' || tags.landuse === 'grass' || tags.landuse === 'meadow') return TileType.PARK;
-  if (tags.railway) return TileType.RAIL;
+
+  // Feuchtgebiet
+  if (tags.natural === 'wetland' || tags.natural === 'marsh') return TileType.WETLAND;
+
+  // Park / Grünfläche
+  if (tags.leisure === 'park' || tags.leisure === 'nature_reserve' || tags.leisure === 'golf_course') return TileType.PARK;
+  if (tags.landuse === 'grass' || tags.landuse === 'meadow' || tags.landuse === 'village_green') return TileType.PARK;
+  if (tags.natural === 'grassland' || tags.natural === 'scrub' || tags.natural === 'heath') return TileType.PARK;
+
+  // Landwirtschaft
+  if (tags.landuse === 'farmland' || tags.landuse === 'farmyard' || tags.landuse === 'orchard' || tags.landuse === 'vineyard') return TileType.FARMLAND;
+
+  // Verkehr
+  if (tags.railway === 'rail' || tags.railway === 'subway' || tags.railway === 'tram') return TileType.RAIL;
   if (tags.highway) return TileType.ROAD;
+
+  // Bebauung
   if (tags.landuse === 'residential') return TileType.RESIDENTIAL;
-  if (tags.landuse === 'commercial' || tags.shop) return TileType.COMMERCIAL;
+  if (tags.landuse === 'commercial' || tags.landuse === 'retail') return TileType.COMMERCIAL;
   if (tags.landuse === 'industrial') return TileType.INDUSTRIAL;
-  if (tags.building) {
-    if (tags.building === 'residential' || tags.building === 'apartments') return TileType.RESIDENTIAL;
-    if (tags.building === 'commercial' || tags.building === 'retail') return TileType.COMMERCIAL;
-    if (tags.building === 'industrial') return TileType.INDUSTRIAL;
-    return TileType.BUILDING;
-  }
+  if (tags.building) return TileType.BUILDING;
 
   return TileType.UNKNOWN;
 }

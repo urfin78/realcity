@@ -46,7 +46,7 @@ export class Renderer {
         ctx.fillRect(px, py, sz, sz);
 
         // Gitter nur bei ausreichendem Zoom
-        if (camera.zoom >= 2) {
+        if (camera.zoom >= 6) {
           ctx.strokeStyle = 'rgba(0,0,0,0.2)';
           ctx.strokeRect(px, py, sz, sz);
         }

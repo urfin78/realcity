@@ -3,9 +3,9 @@ import { createConverter } from './geoconverter.js';
 
 const OVERPASS_URL = 'https://overpass-api.de/api/interpreter';
 
-// Raster-Größe: ~120x80 Tiles für einen Stadtausschnitt
-const GRID_WIDTH  = 120;
-const GRID_HEIGHT = 80;
+// Raster-Größe: ~300x200 Tiles → ~65m pro Tile bei 20km Ausschnitt
+const GRID_WIDTH  = 300;
+const GRID_HEIGHT = 200;
 
 /**
  * Lädt OSM-Daten für eine Stadt und gibt ein TileGrid zurück.
@@ -47,16 +47,17 @@ async function fetchBBox(cityName) {
   const minLon = parseFloat(boundingbox[2]);
   const maxLon = parseFloat(boundingbox[3]);
 
-  // Auf sinnvolle Spielgröße zuschneiden (max ~3km × 3km)
+  // Stadtregion: ~20km × 14km Ausschnitt
   const centerLat = (minLat + maxLat) / 2;
   const centerLon = (minLon + maxLon) / 2;
-  const delta = 0.015; // ~1.5km Radius
+  const deltaLat = 0.09; // ~10km N/S
+  const deltaLon = 0.13; // ~10km O/W (Lon-Grad schmaler bei mittleren Breiten)
 
   return {
-    minLat: centerLat - delta,
-    maxLat: centerLat + delta,
-    minLon: centerLon - delta * 1.4, // Lon-Grad sind schmaler
-    maxLon: centerLon + delta * 1.4,
+    minLat: centerLat - deltaLat,
+    maxLat: centerLat + deltaLat,
+    minLon: centerLon - deltaLon,
+    maxLon: centerLon + deltaLon,
   };
 }
 
@@ -65,15 +66,17 @@ async function fetchOSMElements(bbox) {
   const b = `${minLat},${minLon},${maxLat},${maxLon}`;
 
   const query = `
-    [out:json][timeout:25];
+    [out:json][timeout:40];
     (
-      way["building"](${b});
-      way["highway"](${b});
       way["landuse"](${b});
       way["natural"](${b});
-      way["leisure"](${b});
-      way["waterway"](${b});
-      way["railway"](${b});
+      way["waterway"]["waterway"!="drain"]["waterway"!="ditch"](${b});
+      way["leisure"~"park|nature_reserve|golf_course"](${b});
+      way["highway"~"motorway|trunk|primary|secondary"](${b});
+      way["railway"~"rail|subway"](${b});
+      relation["natural"](${b});
+      relation["landuse"](${b});
+      relation["leisure"~"park|nature_reserve"](${b});
     );
     out geom;
   `;
@@ -112,18 +115,27 @@ function buildGrid(elements, bbox) {
   }
 
   for (const el of elements) {
-    if (el.type !== 'way' || !el.geometry) continue;
-
-    const coords = el.geometry.map(g => ({ lat: g.lat, lon: g.lon }));
     const type = osmTagsToTileType(el.tags);
-    const isArea = el.tags.building || el.tags.landuse || el.tags.leisure ||
-                   el.tags.natural === 'water' || el.tags.natural === 'wood';
 
-    const tiles = isArea
-      ? converter.polygonToTiles(coords)
-      : converter.lineToTiles(coords);
+    if (el.type === 'way' && el.geometry) {
+      const coords = el.geometry.map(g => ({ lat: g.lat, lon: g.lon }));
+      const isArea = !!(el.tags.landuse || el.tags.leisure ||
+                        el.tags.natural === 'water' || el.tags.natural === 'wood' ||
+                        el.tags.natural === 'wetland' || el.tags.natural === 'grassland' ||
+                        el.tags.natural === 'scrub' || el.tags.natural === 'heath');
+      const tiles = isArea ? converter.polygonToTiles(coords) : converter.lineToTiles(coords);
+      tiles.forEach(({ x, y }) => setTile(x, y, type));
+    }
 
-    tiles.forEach(({ x, y }) => setTile(x, y, type));
+    // Relations: äußeren Ring (outer members) als Fläche rastern
+    if (el.type === 'relation' && el.members) {
+      for (const member of el.members) {
+        if (member.type === 'way' && member.role === 'outer' && member.geometry) {
+          const coords = member.geometry.map(g => ({ lat: g.lat, lon: g.lon }));
+          converter.polygonToTiles(coords).forEach(({ x, y }) => setTile(x, y, type));
+        }
+      }
+    }
   }
 
   return { grid, width: GRID_WIDTH, height: GRID_HEIGHT };
