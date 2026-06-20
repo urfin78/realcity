@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RealCity</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #1a1a2e; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; overflow: hidden; font-family: sans-serif; color: #eee; }
+    #canvas-container { position: relative; }
+    canvas { display: block; cursor: grab; }
+    canvas:active { cursor: grabbing; }
+    #hud {
+      position: absolute; top: 10px; left: 10px;
+      background: rgba(0,0,0,0.6); padding: 8px 12px; border-radius: 6px; font-size: 13px;
+    }
+    #city-select {
+      position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%);
+      background: rgba(0,0,0,0.7); padding: 10px 16px; border-radius: 8px;
+      display: flex; gap: 10px; align-items: center;
+    }
+    #city-select select {
+      background: #333; color: #eee; border: 1px solid #555; padding: 4px 8px; border-radius: 4px;
+    }
+    #city-select button {
+      background: #2a6db5; color: #fff; border: none; padding: 5px 12px; border-radius: 4px; cursor: pointer;
+    }
+    #city-select button:hover { background: #3480cc; }
+    #status { font-size: 12px; opacity: 0.7; }
+  </style>
+</head>
+<body>
+  <div id="canvas-container">
+    <canvas id="gameCanvas"></canvas>
+    <div id="hud">
+      <div id="tile-info">Klicke auf ein Tile</div>
+      <div id="status"></div>
+    </div>
+    <div id="city-select">
+      <label>Stadt:</label>
+      <select id="city-input">
+        <option value="Dresden">Dresden</option>
+        <option value="Leipzig">Leipzig</option>
+        <option value="Berlin">Berlin</option>
+        <option value="München">München</option>
+        <option value="Hamburg">Hamburg</option>
+      </select>
+      <button id="load-btn">Laden</button>
+    </div>
+  </div>
+
+  <script type="module" src="src/core/game.js"></script>
+</body>
+</html>
