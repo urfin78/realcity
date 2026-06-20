@@ -99,8 +99,8 @@ Da es keinen Build gibt, schreibt der Release-Workflow beim Deploy eine
 
 **Ziel:** Neue Karten auf Knopfdruck erzeugen (Karten werden nicht zur Laufzeit
 generiert). Ein `workflow_dispatch`-Workflow ruft `generate_map.py` auf, pflegt
-`maps/index.json` und öffnet via `peter-evans/create-pull-request` automatisch
-einen PR. Kein Auto-Merge. Details in
+`maps/index.json` und öffnet via `gh pr create` (CLI, keine externe Action)
+automatisch einen PR. Kein Auto-Merge. Details in
 [features/map-pipeline.md](features/map-pipeline.md).
 
 **Berührt:** `tools/generate_map.py` (Manifest-Pflege),

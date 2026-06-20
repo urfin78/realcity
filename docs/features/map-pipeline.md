@@ -16,8 +16,10 @@ deshalb eine Pipeline, die auf Knopfdruck eine neue Karte baut und als PR vorleg
   verhindert Pfad-Manipulation).
 - Installiert `requests rasterio numpy`, ruft `generate_map.py` auf.
 - Validiert die erzeugte Karte (Pflichtfelder, Grid-Länge).
-- Öffnet via `peter-evans/create-pull-request@v7` automatisch einen PR
+- Öffnet via `gh pr create` (CLI, keine externe Action) automatisch einen PR
   (`map/<stadt>` → `main`). **Kein Auto-Merge** — bewusste Prüfung.
+- Hinweis: GitHub startet die CI auf bot-erstellten PRs nicht automatisch
+  (Rekursionsschutz des `GITHUB_TOKEN`); im PR einmal „Approve workflows to run".
 
 ## Betroffene Dateien
 - `tools/generate_map.py` (`update_manifest`)

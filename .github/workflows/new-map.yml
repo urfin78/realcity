@@ -56,24 +56,44 @@ jobs:
           print("Karte valide:", sys.argv[1], f"{g}x{g}")
           PY
 
-      - name: Pull Request öffnen
-        uses: peter-evans/create-pull-request@v7
-        with:
-          branch: map/${{ inputs.name }}
-          base: main
-          commit-message: "feat: Karte ${{ inputs.name }} generiert (SRTM + OSM)"
-          title: "feat: Karte ${{ inputs.name }}"
-          body: |
-            Automatisch generierte Spielkarte.
+      # Branch + PR direkt per gh-CLI — keine externe Action (Dependency-Prinzip).
+      # Hinweis: GitHub startet die CI auf dem so erstellten PR nicht automatisch
+      # (Rekursionsschutz für GITHUB_TOKEN). Im PR einmal "Approve workflows to run".
+      - name: Branch anlegen, committen und Pull Request öffnen
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          branch="map/${{ inputs.name }}"
 
-            - **Stadt:** ${{ inputs.name }}
-            - **Mittelpunkt:** ${{ inputs.lat }}, ${{ inputs.lon }}
-            - Erzeugt von `tools/generate_map.py` aus SRTM-Höhe + OSM (Wasser/Wald)
-            - `maps/index.json` (Manifest) wurde mit aktualisiert
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
 
-            Kartendaten: SRTM (Public Domain) + © OpenStreetMap-Mitwirkende (ODbL).
+          # Nichts geändert? (z.B. identische Karte) → sauber abbrechen
+          if git diff --quiet -- maps/; then
+            echo "Keine Änderungen an maps/ — kein PR nötig."
+            exit 0
+          fi
 
-            🤖 Generated with [Claude Code](https://claude.com/claude-code)
-          add-paths: |
-            maps/*.json
-          delete-branch: true
+          git checkout -b "$branch"
+          git add maps/
+          git commit -m "feat: Karte ${{ inputs.name }} generiert (SRTM + OSM)"
+          git push --set-upstream origin "$branch"
+
+          # PR-Body in Datei schreiben (vermeidet Heredoc-Einrückungsprobleme in YAML)
+          {
+            echo "Automatisch generierte Spielkarte."
+            echo ""
+            echo "- **Stadt:** ${{ inputs.name }}"
+            echo "- **Mittelpunkt:** ${{ inputs.lat }}, ${{ inputs.lon }}"
+            echo "- Erzeugt von \`tools/generate_map.py\` aus SRTM-Höhe + OSM (Wasser/Wald)"
+            echo "- \`maps/index.json\` (Manifest) wurde mit aktualisiert"
+            echo ""
+            echo "Kartendaten: SRTM (Public Domain) + © OpenStreetMap-Mitwirkende (ODbL)."
+            echo ""
+            echo "🤖 Generated with [Claude Code](https://claude.com/claude-code)"
+          } > /tmp/pr_body.md
+
+          gh pr create --base main --head "$branch" \
+            --title "feat: Karte ${{ inputs.name }}" \
+            --body-file /tmp/pr_body.md
