@@ -16,3 +16,18 @@ Thumbs.db
 dist/
 node_modules/
 .cache/
+
+# SRTM-Höhenrohdaten (groß, frei nachladbar via tools/generate_map.py)
+srtm/*.tif
+srtm/*.zip
+srtm/*.hgt
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Claude Code — lokale, persönliche Einstellungen (geteilte settings.json darf rein)
+.claude/settings.local.json
+.claude/*.local.json

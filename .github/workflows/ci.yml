@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# actions/checkout|setup-node|setup-python shippen Anfang 2026 noch Node-20-Bindings;
+# GitHub erzwingt Node 24 ab 2026-06-02. Früh opt-in vermeidet Deprecation-Warnungen.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+jobs:
+  js:
+    name: JS-Syntax & Unit-Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+
+      # Reine Standardbibliothek — kein npm install, keine package.json, null Dependencies.
+      - name: Syntax-Check aller ES-Module
+        run: |
+          echo "## JS-Syntax" >> "$GITHUB_STEP_SUMMARY"
+          fail=0
+          while IFS= read -r f; do
+            if out=$(node --check "$f" 2>&1); then
+              echo "- :white_check_mark: \`$f\`" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "- :x: \`$f\`" >> "$GITHUB_STEP_SUMMARY"
+              echo "$out"
+              fail=1
+            fi
+          done < <(find src -name '*.js' | sort)
+          exit $fail
+
+      - name: Unit-Tests (node:test)
+        run: node --test tests/
+
+  python:
+    name: Python-Tool prüfen
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Syntax-Check generate_map.py
+        run: python -m py_compile tools/generate_map.py
+
+      - name: Lint (kritische Fehler)
+        run: |
+          pip install --quiet pyflakes
+          pyflakes tools/generate_map.py
+
+  data:
+    name: Karten-JSON validieren
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: maps/*.json müssen gültiges JSON mit Pflichtfeldern sein
+        run: |
+          fail=0
+          for f in maps/*.json; do
+            [ -e "$f" ] || continue
+            python3 - "$f" <<'PY' || fail=1
+          import json, sys
+          f = sys.argv[1]
+          d = json.load(open(f))
+          for key in ("name", "grid", "elevation", "water", "forest"):
+              assert key in d, f"{f}: Pflichtfeld '{key}' fehlt"
+          g = d["grid"]
+          assert len(d["elevation"]) == g * g, f"{f}: elevation hat falsche Länge"
+          print(f"OK: {f} (grid {g}x{g})")
+          PY
+          done
+          exit $fail
