@@ -46,17 +46,15 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
+      # python3 ist auf ubuntu-latest vorinstalliert — kein setup-python nötig
+      # (vermeidet die Node-20-Deprecation-Warnung dieser Action).
       - name: Syntax-Check generate_map.py
-        run: python -m py_compile tools/generate_map.py
+        run: python3 -m py_compile tools/generate_map.py
 
       - name: Lint (kritische Fehler)
         run: |
-          pip install --quiet pyflakes
-          pyflakes tools/generate_map.py
+          python3 -m pip install --quiet pyflakes
+          python3 -m pyflakes tools/generate_map.py
 
   data:
     name: Karten-JSON validieren

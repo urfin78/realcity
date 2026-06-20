@@ -135,7 +135,6 @@ def _sample_tif_raw(tif_path, tile_lat_min, tile_lat_max, tile_lon_min, tile_lon
         num_entries = struct.unpack(bo + 'H', f.read(2))[0]
 
         strip_offsets = []
-        strip_bytecounts = []
         for _ in range(num_entries):
             tag, typ, count = struct.unpack(bo + 'HHI', f.read(8))
             value_raw = f.read(4)
