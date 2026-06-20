@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RealCity</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #111; overflow: hidden; font-family: sans-serif; color: #eee; }
+    canvas { display: block; cursor: grab; }
+    canvas:active { cursor: grabbing; }
+
+    #hud {
+      position: fixed; top: 10px; left: 10px;
+      background: rgba(0,0,0,0.65); padding: 10px 14px;
+      border-radius: 6px; font-size: 13px; pointer-events: none;
+      display: flex; flex-direction: column; gap: 5px; min-width: 160px;
+    }
+    #hud .row { display: flex; justify-content: space-between; gap: 16px; }
+    #hud .label { opacity: 0.6; }
+    #hud .value { font-weight: bold; }
+    #hud .money { color: #7fd87f; }
+    #hud .pop   { color: #7fc8ff; }
+    #hud .tick  { color: #ffd87f; }
+    #tile-info  { font-size: 11px; opacity: 0.55; margin-top: 2px; }
+
+    #toolbar {
+      position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
+      background: rgba(0,0,0,0.78); padding: 10px 14px; border-radius: 10px;
+      display: flex; gap: 8px; align-items: center;
+    }
+    #toolbar select {
+      background: #333; color: #eee; border: 1px solid #555;
+      padding: 5px 8px; border-radius: 4px; cursor: pointer; font-size: 13px;
+    }
+    #toolbar button {
+      background: #2a2a2a; color: #ccc; border: 1px solid #444;
+      padding: 5px 11px; border-radius: 5px; cursor: pointer; font-size: 13px;
+    }
+    #toolbar button:hover  { background: #3a3a3a; color: #fff; }
+    #toolbar button.active { background: #1a4a8a; border-color: #3a6abf; color: #fff; }
+    #toolbar .sep { width: 1px; background: #444; align-self: stretch; margin: 0 2px; }
+
+    /* Werkzeug-Farb-Indikator */
+    #toolbar button[data-tool="road"]        { border-left: 3px solid #888; }
+    #toolbar button[data-tool="residential"] { border-left: 3px solid #5cb85c; }
+    #toolbar button[data-tool="commercial"]  { border-left: 3px solid #5b9bd5; }
+    #toolbar button[data-tool="industrial"]  { border-left: 3px solid #aaa; }
+    #toolbar button[data-tool="admin"]       { border-left: 3px solid #d4a800; }
+
+    #attribution {
+      position: fixed; bottom: 4px; right: 6px;
+      font-size: 10px; color: #888; background: rgba(0,0,0,0.45);
+      padding: 2px 6px; border-radius: 3px; pointer-events: auto; z-index: 5;
+    }
+    #attribution a { color: #aac; text-decoration: none; }
+    #attribution a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas"></canvas>
+
+  <div id="hud">
+    <div class="row">
+      <span class="label">Budget</span>
+      <span class="value money" id="hud-money">100.000 €</span>
+    </div>
+    <div class="row">
+      <span class="label">Bevölkerung</span>
+      <span class="value pop" id="hud-pop">0</span>
+    </div>
+    <div class="row">
+      <span class="label">Tick</span>
+      <span class="value tick" id="hud-tick">0</span>
+    </div>
+    <div id="tile-info">—</div>
+  </div>
+
+  <!-- Pflicht-Attribution: Kartendaten unter ODbL / Public Domain -->
+  <div id="attribution">
+    Karte: © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>-Mitwirkende (ODbL)
+    · Höhe: SRTM (NASA/CGIAR, Public Domain)
+  </div>
+
+  <div id="toolbar">
+    <select id="city-select">
+      <option value="dresden">Dresden</option>
+      <option value="hamburg">Hamburg</option>
+      <option value="münchen">München</option>
+      <option value="leipzig">Leipzig</option>
+    </select>
+    <button id="load-btn">Laden</button>
+    <div class="sep"></div>
+    <button data-tool="inspect" class="active">Inspect</button>
+    <button data-tool="road">Straße <small>500€</small></button>
+    <button data-tool="residential">Wohnen <small>1k€</small></button>
+    <button data-tool="commercial">Gewerbe <small>1k€</small></button>
+    <button data-tool="industrial">Industrie <small>1k€</small></button>
+    <button data-tool="admin">Verwaltung <small>1k€</small></button>
+  </div>
+
+  <script type="module" src="src/core/game.js"></script>
+</body>
+</html>
