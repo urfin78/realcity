@@ -24,8 +24,13 @@ Siehe [ROADMAP](../ROADMAP.md) §1. Fundament-Feature: macht das Spiel benutzbar
   Straßennachbar, kein Geld) + Kostenlabel am Cursor.
 
 ### 4. HUD-Erweiterung
-- Zonen-Zähler (R/C/I/Verwaltung) und Einnahmen/Tick.
+- Zonen-Zähler (R/C/I/Verwaltung), Straßen-Zähler und Saldo/Tick.
 - Platzhalter-RCI-Balken (wird in `feat/utilities-demand` mit Daten gefüllt).
+
+### 5. Dynamische Städteliste
+- Dropdown wird aus `maps/index.json` (Manifest) befüllt — nur wirklich
+  vorhandene Karten erscheinen (keine toten Einträge mehr).
+- CI prüft, dass jede im Manifest gelistete Karte als Datei existiert.
 
 ## Betroffene Dateien
 - neu: `src/core/persistence.js`, `tests/persistence.test.mjs`
