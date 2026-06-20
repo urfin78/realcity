@@ -1,8 +1,9 @@
 // RealCity — Hauptspiel
 
-import { state, spend, startTicks, onTick, COSTS } from './state.js';
+import { state, spend, earn, startTicks, onTick, applyState, resetState, COSTS } from './state.js';
 import { runSimulation } from './simulation.js';
 import { isConnected, hasRoadNeighbor } from './network.js';
+import { save, load, clear } from './persistence.js';
 
 const canvas    = document.getElementById('gameCanvas');
 const ctx       = canvas.getContext('2d');
@@ -10,8 +11,17 @@ const tileInfo  = document.getElementById('tile-info');
 const hudMoney  = document.getElementById('hud-money');
 const hudPop    = document.getElementById('hud-pop');
 const hudTick   = document.getElementById('hud-tick');
+const hudCash   = document.getElementById('hud-cashflow');
+const hudZones  = document.getElementById('hud-zones');
+const hudRoads  = document.getElementById('hud-roads');
 const loadBtn   = document.getElementById('load-btn');
+const resetBtn  = document.getElementById('reset-btn');
 const citySelect= document.getElementById('city-select');
+
+// Anteil der Baukosten, der beim Abriss erstattet wird
+const REFUND = 0.5;
+let currentCity = null;
+let lastIncome  = 0;
 
 // --- Terrain-Farben ---
 const TERRAIN_COLORS = {
@@ -120,6 +130,26 @@ function updateHUD() {
   hudMoney.textContent = state.money.toLocaleString('de-DE') + ' €';
   hudPop.textContent   = state.population.toLocaleString('de-DE');
   hudTick.textContent  = state.tick;
+
+  // Saldo des letzten Ticks
+  const sign = lastIncome > 0 ? '+' : (lastIncome < 0 ? '−' : '±');
+  hudCash.textContent = `${sign}${Math.abs(lastIncome).toLocaleString('de-DE')} €`;
+  hudCash.className = lastIncome > 0 ? 'value pos' : (lastIncome < 0 ? 'value neg' : 'value');
+
+  // Zonen-/Straßen-Zähler
+  let r = 0, c = 0, ind = 0, a = 0, roads = 0;
+  if (cells) {
+    for (const cell of cells) {
+      if (!cell) continue;
+      if (cell.type === 'road') { roads++; continue; }
+      if (cell.zone === 'residential') r++;
+      else if (cell.zone === 'commercial') c++;
+      else if (cell.zone === 'industrial') ind++;
+      else if (cell.zone === 'admin') a++;
+    }
+  }
+  hudZones.textContent = `${r}/${c}/${ind}/${a}`;
+  hudRoads.textContent = roads;
 }
 
 // --- Render ---
@@ -179,6 +209,18 @@ function draw() {
       }
     }
   }
+
+  // Bau-Vorschau (Hover-Overlay)
+  if (hover) {
+    const ct = cellToTerrain(hover.gx, hover.gy);
+    const p  = terrainToCanvas(ct.x, ct.y);
+    const pw = ct.w * camera.zoom, ph = ct.h * camera.zoom;
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = hover.ok ? 'rgba(80,230,80,0.95)' : 'rgba(230,70,70,0.95)';
+    ctx.fillStyle   = hover.ok ? 'rgba(80,230,80,0.18)' : 'rgba(230,70,70,0.15)';
+    ctx.fillRect(p.x, p.y, pw, ph);
+    ctx.strokeRect(p.x + 1, p.y + 1, pw - 2, ph - 2);
+  }
 }
 
 // --- Karte laden ---
@@ -189,11 +231,23 @@ async function loadMap(city) {
     const r = await fetch(`maps/${city}.json`);
     if (!r.ok) throw new Error(`maps/${city}.json nicht gefunden`);
     map   = await r.json();
-    cells = new Array(GAME_GRID * GAME_GRID).fill(null);
+    currentCity = city;
+
+    // Gespeicherten Spielstand wiederherstellen, sonst frisch starten
+    const saved = load(city);
+    if (saved) {
+      cells = saved.cells;
+      applyState(saved.state);
+      tileInfo.textContent = `${map.name} — Spielstand geladen (Tick ${state.tick})`;
+    } else {
+      cells = new Array(GAME_GRID * GAME_GRID).fill(null);
+      resetState();
+      tileInfo.textContent = `${map.name} geladen`;
+    }
+
     camera.x    = map.grid / 2;
     camera.y    = map.grid / 2;
     camera.zoom = Math.min(canvas.width, canvas.height) / map.grid;
-    tileInfo.textContent = `${map.name} geladen`;
     startTicks(5000);
     updateHUD();
     draw();
@@ -204,16 +258,77 @@ async function loadMap(city) {
   }
 }
 
-loadBtn.addEventListener('click', () => loadMap(citySelect.value));
+loadBtn.addEventListener('click', () => { if (citySelect.value) loadMap(citySelect.value); });
+
+// --- Städteliste aus dem Manifest (nur wirklich vorhandene Karten) ---
+async function loadCityList() {
+  try {
+    const r = await fetch('maps/index.json', { cache: 'no-store' });
+    if (!r.ok) throw new Error('maps/index.json fehlt');
+    const { maps } = await r.json();
+    citySelect.innerHTML = '';
+    if (!maps || !maps.length) {
+      citySelect.innerHTML = '<option value="">Keine Karten</option>';
+      return;
+    }
+    for (const m of maps) {
+      const opt = document.createElement('option');
+      opt.value = m.id;
+      opt.textContent = m.name;
+      citySelect.appendChild(opt);
+    }
+    tileInfo.textContent = `${maps.length} Karte(n) verfügbar — „Laden" klicken`;
+  } catch (e) {
+    citySelect.innerHTML = '<option value="">Keine Karten</option>';
+    tileInfo.textContent = `Städteliste nicht ladbar: ${e.message}`;
+  }
+}
+loadCityList();
 
 // --- Tick ---
 onTick(() => {
   if (!cells) return;
-  const income = runSimulation(cells);
+  lastIncome = runSimulation(cells);
   updateHUD();
   draw();
-  if (income > 0) tileInfo.textContent = `Tick ${state.tick} — +${income.toLocaleString('de-DE')} €`;
+  if (lastIncome > 0) tileInfo.textContent = `Tick ${state.tick} — +${lastIncome.toLocaleString('de-DE')} €`;
+  autoSave();
 });
+
+// --- Auto-Save (am Tick) ---
+function autoSave() {
+  if (currentCity && cells) save(currentCity, cells, state);
+}
+
+// --- Bau-Vorschau ---
+let hover = null; // { gx, gy, ok, reason, cost }
+
+// Bewertet, ob das aktive Werkzeug auf (gx,gy) anwendbar ist.
+function evaluateBuild(gx, gy) {
+  if (!cells || activeTool === 'inspect') return null;
+  const i = cellIdx(gx, gy);
+  const step = (map.grid - 1) / GAME_GRID;
+  const terrain = terrainAt((gx + 0.5) * step, (gy + 0.5) * step);
+
+  if (activeTool === 'bulldoze') {
+    return cells[i]
+      ? { ok: true,  cost: -Math.round((cells[i].type === 'road' ? COSTS.road : COSTS.zone) * REFUND) }
+      : { ok: false, reason: 'leer' };
+  }
+  if (cells[i]) return { ok: false, reason: 'belegt' };
+  if (terrain === 'water') return { ok: false, reason: 'Wasser' };
+
+  if (activeTool === 'road') {
+    return state.money >= COSTS.road
+      ? { ok: true, cost: COSTS.road }
+      : { ok: false, reason: 'kein Geld', cost: COSTS.road };
+  }
+  // Zone
+  if (!hasRoadNeighbor(cells, gx, gy)) return { ok: false, reason: 'keine Straße', cost: COSTS.zone };
+  return state.money >= COSTS.zone
+    ? { ok: true, cost: COSTS.zone }
+    : { ok: false, reason: 'kein Geld', cost: COSTS.zone };
+}
 
 // --- Toolbar ---
 document.querySelectorAll('[data-tool]').forEach(btn => {
@@ -245,11 +360,18 @@ canvas.addEventListener('click', e => {
     return;
   }
 
-  // Löschen bei Doppelklick auf eigenes Objekt
-  if (cells[i]?.type === activeTool || cells[i]?.zone === activeTool) {
+  // Abriss: belegte Zelle entfernen, Teil der Baukosten erstatten
+  if (activeTool === 'bulldoze') {
+    const c = cells[i];
+    if (!c) { tileInfo.textContent = `[${gx},${gy}] nichts zum Abreißen`; return; }
+    const base = c.type === 'road' ? COSTS.road : COSTS.zone;
+    const refund = Math.round(base * REFUND);
     cells[i] = null;
-    tileInfo.textContent = `[${gx},${gy}] entfernt`;
+    earn(refund);
+    tileInfo.textContent = `[${gx},${gy}] abgerissen (+${refund.toLocaleString('de-DE')} €)`;
+    updateHUD();
     draw();
+    autoSave();
     return;
   }
 
@@ -276,6 +398,20 @@ canvas.addEventListener('click', e => {
 
   updateHUD();
   draw();
+  autoSave();
+});
+
+// --- Reset-Button ---
+resetBtn.addEventListener('click', () => {
+  if (!currentCity) { tileInfo.textContent = 'Erst eine Stadt laden'; return; }
+  if (!confirm('Stadt wirklich zurücksetzen? Der Spielstand geht verloren.')) return;
+  clear(currentCity);
+  cells = new Array(GAME_GRID * GAME_GRID).fill(null);
+  resetState();
+  lastIncome = 0;
+  tileInfo.textContent = `${map?.name ?? currentCity} zurückgesetzt`;
+  updateHUD();
+  draw();
 });
 
 // --- Drag ---
@@ -286,14 +422,40 @@ canvas.addEventListener('mousedown', e => {
   dragMoved = false;
 });
 window.addEventListener('mousemove', e => {
-  if (!drag) return;
-  const dx = e.clientX - drag.x;
-  const dy = e.clientY - drag.y;
-  if (Math.abs(dx) > 3 || Math.abs(dy) > 3) dragMoved = true;
-  camera.x = drag.cx - dx / camera.zoom;
-  camera.y = drag.cy - dy / camera.zoom;
-  draw();
+  if (drag) {
+    const dx = e.clientX - drag.x;
+    const dy = e.clientY - drag.y;
+    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) dragMoved = true;
+    camera.x = drag.cx - dx / camera.zoom;
+    camera.y = drag.cy - dy / camera.zoom;
+    draw();
+    return;
+  }
+  // Bau-Vorschau aktualisieren
+  if (!map) return;
+  const t = canvasToTerrain(e.clientX, e.clientY);
+  const cell = terrainToCell(t.x, t.y);
+  const next = cell ? { gx: cell.gx, gy: cell.gy, ...evaluateBuild(cell.gx, cell.gy) } : null;
+  // Nur neu zeichnen, wenn sich die Hover-Zelle ändert (spart Renders)
+  if (!sameHover(hover, next)) {
+    hover = next;
+    if (next && next.cost !== undefined && activeTool !== 'inspect') {
+      const c = next.cost;
+      const money = c < 0 ? `+${(-c).toLocaleString('de-DE')} €` : `-${c.toLocaleString('de-DE')} €`;
+      tileInfo.textContent = next.ok
+        ? `[${next.gx},${next.gy}] ${activeTool} → ${money}`
+        : `[${next.gx},${next.gy}] ${next.reason ?? 'nicht baubar'}`;
+    } else if (next && !next.ok && activeTool !== 'inspect') {
+      tileInfo.textContent = `[${next.gx},${next.gy}] ${next.reason ?? 'nicht baubar'}`;
+    }
+    draw();
+  }
 });
+function sameHover(a, b) {
+  if (!a || !b) return a === b;
+  return a.gx === b.gx && a.gy === b.gy && a.ok === b.ok;
+}
+canvas.addEventListener('mouseleave', () => { if (hover) { hover = null; draw(); } });
 window.addEventListener('mouseup', () => { drag = null; });
 
 // --- Zoom ---

@@ -46,3 +46,18 @@ export function spend(amount) {
 export function earn(amount) {
   state.money += amount;
 }
+
+// Überschreibt die state-Felder (z.B. nach dem Laden eines Spielstands),
+// ohne die Objekt-Referenz zu ändern (Importe zeigen weiter auf dasselbe state).
+export function applyState({ money, population, tick }) {
+  if (Number.isFinite(money))      state.money = money;
+  if (Number.isFinite(population)) state.population = population;
+  if (Number.isFinite(tick))       state.tick = tick;
+}
+
+// Setzt den Zustand auf Spielbeginn zurück.
+export function resetState() {
+  state.money = 100_000;
+  state.population = 0;
+  state.tick = 0;
+}

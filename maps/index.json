@@ -1,0 +1,5 @@
+{
+  "maps": [
+    { "id": "dresden", "name": "Dresden", "center": { "lat": 51.05, "lon": 13.74 } }
+  ]
+}
