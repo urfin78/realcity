@@ -478,5 +478,32 @@ def main():
 
     print(f"\nFertig: {out_path} ({os.path.getsize(out_path)//1024} KB)")
 
+    update_manifest(name, center_lat, center_lon)
+
+
+def update_manifest(name, center_lat, center_lon):
+    """Trägt die Karte ins Manifest maps/index.json ein (ersetzt bei gleicher ID)."""
+    manifest_path = os.path.join(MAPS_DIR, 'index.json')
+    entry = {'id': name.lower(), 'name': name,
+             'center': {'lat': center_lat, 'lon': center_lon}}
+
+    data = {'maps': []}
+    if os.path.exists(manifest_path):
+        try:
+            with open(manifest_path) as f:
+                data = json.load(f)
+        except (ValueError, OSError):
+            data = {'maps': []}
+    maps = [m for m in data.get('maps', []) if m.get('id') != entry['id']]
+    maps.append(entry)
+    maps.sort(key=lambda m: m['name'])
+    data['maps'] = maps
+
+    with open(manifest_path, 'w') as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+        f.write('\n')
+    print(f"Manifest aktualisiert: {manifest_path} ({len(maps)} Karte(n))")
+
+
 if __name__ == '__main__':
     main()

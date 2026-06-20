@@ -1,0 +1,79 @@
+name: Neue Karte generieren
+
+# Manuell ausgelöst: erzeugt aus SRTM+OSM eine neue Spielkarte und öffnet
+# automatisch einen Pull Request. Kein Auto-Merge — der PR wird bewusst geprüft.
+on:
+  workflow_dispatch:
+    inputs:
+      name:
+        description: 'Stadtname (z.B. Leipzig)'
+        required: true
+      lat:
+        description: 'Mittelpunkt Breitengrad (z.B. 51.34)'
+        required: true
+      lon:
+        description: 'Mittelpunkt Längengrad (z.B. 12.37)'
+        required: true
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write       # Branch anlegen
+      pull-requests: write   # PR öffnen
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Eingaben prüfen
+        run: |
+          echo "Stadt: ${{ inputs.name }} @ ${{ inputs.lat }}, ${{ inputs.lon }}"
+          # Lat/Lon müssen Zahlen sein
+          python3 -c "float('${{ inputs.lat }}'); float('${{ inputs.lon }}')"
+          # Name: nur Buchstaben/Leerzeichen/Bindestrich (verhindert Pfad-Tricks)
+          python3 -c "import re,sys; sys.exit(0 if re.fullmatch(r'[A-Za-zÄÖÜäöüß \\-]{2,40}', '${{ inputs.name }}') else 1)" \
+            || (echo '::error::Ungültiger Stadtname' && exit 1)
+
+      - name: Abhängigkeiten
+        run: python3 -m pip install --quiet requests rasterio numpy
+
+      - name: Karte generieren
+        run: |
+          python3 tools/generate_map.py "${{ inputs.name }}" "${{ inputs.lat }}" "${{ inputs.lon }}"
+
+      - name: Generierte Karte validieren
+        run: |
+          id=$(python3 -c "print('${{ inputs.name }}'.lower())")
+          python3 - "maps/$id.json" <<'PY'
+          import json, sys
+          d = json.load(open(sys.argv[1]))
+          g = d["grid"]
+          for k in ("name","grid","elevation","water","forest"):
+              assert k in d, f"Pflichtfeld {k} fehlt"
+          assert len(d["elevation"]) == g*g, "elevation-Länge falsch"
+          print("Karte valide:", sys.argv[1], f"{g}x{g}")
+          PY
+
+      - name: Pull Request öffnen
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: map/${{ inputs.name }}
+          base: main
+          commit-message: "feat: Karte ${{ inputs.name }} generiert (SRTM + OSM)"
+          title: "feat: Karte ${{ inputs.name }}"
+          body: |
+            Automatisch generierte Spielkarte.
+
+            - **Stadt:** ${{ inputs.name }}
+            - **Mittelpunkt:** ${{ inputs.lat }}, ${{ inputs.lon }}
+            - Erzeugt von `tools/generate_map.py` aus SRTM-Höhe + OSM (Wasser/Wald)
+            - `maps/index.json` (Manifest) wurde mit aktualisiert
+
+            Kartendaten: SRTM (Public Domain) + © OpenStreetMap-Mitwirkende (ODbL).
+
+            🤖 Generated with [Claude Code](https://claude.com/claude-code)
+          add-paths: |
+            maps/*.json
+          delete-branch: true
