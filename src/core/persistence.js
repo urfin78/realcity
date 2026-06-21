@@ -1,0 +1,142 @@
+// Spielstand-Persistenz — Serialisierung + localStorage-Wrapper
+//
+// serialize/deserialize sind reine Funktionen (kein DOM, kein localStorage),
+// damit sie mit node:test prüfbar sind. save/load kapseln localStorage.
+
+export const GAME_GRID = 64;
+const SCHEMA = 3;          // 3: Terrain (clearedForest); 2: Wirtschaft
+const KEY_PREFIX = 'realcity:';
+
+const TAX_ZONES = ['residential', 'commercial', 'industrial'];
+
+/**
+ * Wandelt Spielzustand in einen kompakten JSON-String.
+ * Nur belegte Zellen werden gespeichert: [index, kurzcode, level].
+ * Kurzcode: 'R' road, 'r' residential, 'c' commercial, 'i' industrial, 'a' admin.
+ */
+const ZONE_CODE = { residential: 'r', commercial: 'c', industrial: 'i', admin: 'a' };
+const CODE_ZONE = { r: 'residential', c: 'commercial', i: 'industrial', a: 'admin' };
+
+function cellCode(cell) {
+  if (cell.type === 'road') return 'R';
+  return ZONE_CODE[cell.zone] ?? null;
+}
+
+export function serialize(cells, state, clearedForest = null) {
+  const packed = [];
+  for (let i = 0; i < cells.length; i++) {
+    const c = cells[i];
+    if (!c) continue;
+    const code = cellCode(c);
+    if (!code) continue;
+    packed.push([i, code, c.level | 0]);
+  }
+  const taxRates = {};
+  for (const z of TAX_ZONES) taxRates[z] = state.taxRates?.[z] ?? 0.1;
+
+  return JSON.stringify({
+    schema: SCHEMA,
+    grid: GAME_GRID,
+    money: state.money,
+    population: state.population,
+    tick: state.tick,
+    taxRates,
+    debt: state.debt ?? 0,
+    brokeTicks: state.brokeTicks ?? 0,
+    gameOver: state.gameOver === true,
+    cells: packed,
+    // Gerodete Wald-Tiles (Zell-Indizes); leer/null wird weggelassen.
+    cleared: clearedForest ? [...clearedForest] : [],
+  });
+}
+
+/**
+ * Liest einen serialisierten Spielstand zurück.
+ * Wirft bei ungültigem JSON, falschem Schema oder falscher Grid-Größe.
+ * @returns {{ cells: Array, state: {money:number, population:number, tick:number} }}
+ */
+export function deserialize(json) {
+  const data = JSON.parse(json); // wirft bei kaputtem JSON
+  // Schema 1 (vor Wirtschaft) und 2 (vor Terrain) bleiben ladbar; fehlende
+  // Felder erhalten unten Defaults.
+  if (![1, 2, SCHEMA].includes(data.schema)) throw new Error(`Unbekanntes Schema: ${data.schema}`);
+  if (data.grid !== GAME_GRID) throw new Error(`Grid-Größe ${data.grid} ≠ ${GAME_GRID}`);
+  if (!Array.isArray(data.cells)) throw new Error('cells fehlt oder ist kein Array');
+
+  const cells = new Array(GAME_GRID * GAME_GRID).fill(null);
+  for (const entry of data.cells) {
+    const [i, code, level] = entry;
+    if (i < 0 || i >= cells.length) throw new Error(`Zell-Index außerhalb: ${i}`);
+    if (code === 'R') {
+      cells[i] = { type: 'road', level: 0 };
+    } else if (CODE_ZONE[code]) {
+      cells[i] = { type: 'zone', zone: CODE_ZONE[code], level: Math.max(0, Math.min(3, level | 0)) };
+    } else {
+      throw new Error(`Unbekannter Zellcode: ${code}`);
+    }
+  }
+
+  const taxRates = {};
+  for (const z of TAX_ZONES) {
+    const v = data.taxRates?.[z];
+    taxRates[z] = Number.isFinite(v) ? Math.max(0, Math.min(0.2, v)) : 0.1;
+  }
+
+  const cleared = Array.isArray(data.cleared)
+    ? data.cleared.filter(i => Number.isInteger(i) && i >= 0 && i < cells.length)
+    : [];
+
+  return {
+    cells,
+    cleared,
+    state: {
+      money:      Number.isFinite(data.money) ? data.money : 100_000,
+      population: Number.isFinite(data.population) ? data.population : 0,
+      tick:       Number.isFinite(data.tick) ? data.tick : 0,
+      taxRates,
+      debt:       Number.isFinite(data.debt) ? data.debt : 0,
+      brokeTicks: Number.isFinite(data.brokeTicks) ? data.brokeTicks : 0,
+      gameOver:   data.gameOver === true,
+    },
+  };
+}
+
+// --- localStorage-Wrapper (Browser) ---
+
+function storage() {
+  // In Node/Tests gibt es kein localStorage → null, Aufrufer behandeln das.
+  return (typeof localStorage !== 'undefined') ? localStorage : null;
+}
+
+export function save(city, cells, state, clearedForest = null) {
+  const s = storage();
+  if (!s) return false;
+  try {
+    s.setItem(KEY_PREFIX + city, serialize(cells, state, clearedForest));
+    return true;
+  } catch {
+    return false; // Quota überschritten o.ä.
+  }
+}
+
+export function load(city) {
+  const s = storage();
+  if (!s) return null;
+  const json = s.getItem(KEY_PREFIX + city);
+  if (!json) return null;
+  try {
+    return deserialize(json);
+  } catch {
+    return null; // korrupter Stand → ignorieren
+  }
+}
+
+export function clear(city) {
+  const s = storage();
+  if (s) s.removeItem(KEY_PREFIX + city);
+}
+
+export function hasSave(city) {
+  const s = storage();
+  return !!(s && s.getItem(KEY_PREFIX + city));
+}

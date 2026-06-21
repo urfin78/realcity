@@ -4,7 +4,7 @@
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { runSimulation } from '../src/core/simulation.js';
-import { state, INCOME } from '../src/core/state.js';
+import { state, resetState, INCOME, UPKEEP } from '../src/core/state.js';
 
 const GRID = 64;
 const idx = (gx, gy) => gy * GRID + gx;
@@ -15,10 +15,13 @@ function emptyCells() {
 const road = () => ({ type: 'road', level: 0 });
 const zone = (z, level = 0) => ({ type: 'zone', zone: z, level });
 
+// Diese Tests prüfen die Wachstumslogik unabhängig vom Steuer-Würfel:
+// alwaysGrow erzwingt das Wachstum, wenn die Bedingungen erfüllt sind.
+const alwaysGrow = () => 0;
+const sim = (cells) => runSimulation(cells, alwaysGrow);
+
 beforeEach(() => {
-  state.money = 100_000;
-  state.population = 0;
-  state.tick = 0;
+  resetState();
 });
 
 /** Legt eine horizontale Straße y, x=x0..x1 an. */
@@ -32,16 +35,16 @@ test('Industrie an Straße wächst pro Tick (0→1→2→3, dann Deckel)', () =>
   cells[idx(7, 11)] = zone('industrial', 0);
   const c = cells[idx(7, 11)];
 
-  runSimulation(cells); assert.equal(c.level, 1);
-  runSimulation(cells); assert.equal(c.level, 2);
-  runSimulation(cells); assert.equal(c.level, 3);
-  runSimulation(cells); assert.equal(c.level, 3, 'Level 3 ist das Maximum');
+  sim(cells); assert.equal(c.level, 1);
+  sim(cells); assert.equal(c.level, 2);
+  sim(cells); assert.equal(c.level, 3);
+  sim(cells); assert.equal(c.level, 3, 'Level 3 ist das Maximum');
 });
 
 test('Industrie ohne Straße wächst nicht und schrumpft', () => {
   const cells = emptyCells();
   cells[idx(7, 11)] = zone('industrial', 2); // ohne Straße
-  runSimulation(cells);
+  sim(cells);
   assert.equal(cells[idx(7, 11)].level, 1, 'schrumpft ohne Verbindung');
 });
 
@@ -52,12 +55,12 @@ test('Wohnen wächst nur mit Gewerbe/Industrie in Reichweite', () => {
   cells[idx(6, 11)] = home;
 
   // Ohne Nachbar-Zone: kein Wachstum
-  runSimulation(cells);
+  sim(cells);
   assert.equal(home.level, 0, 'kein Wachstum ohne Gewerbe/Industrie');
 
   // Industrie in Radius 5 hinzufügen (muss Level>0 haben um zu zählen)
   cells[idx(9, 11)] = zone('industrial', 2);
-  runSimulation(cells);
+  sim(cells);
   assert.equal(home.level, 1, 'wächst mit Industrie in Reichweite');
 });
 
@@ -67,11 +70,11 @@ test('Gewerbe wächst nur mit Wohnen in Radius 3', () => {
   const shop = zone('commercial', 0);
   cells[idx(6, 11)] = shop;
 
-  runSimulation(cells);
+  sim(cells);
   assert.equal(shop.level, 0, 'kein Wachstum ohne Wohnen');
 
   cells[idx(8, 11)] = zone('residential', 2); // Distanz 2 ≤ 3
-  runSimulation(cells);
+  sim(cells);
   assert.equal(shop.level, 1);
 });
 
@@ -81,22 +84,24 @@ test('Verwaltung: Level 1 wenn verbunden, sonst 0 — wächst nie höher', () =>
   const admin = zone('admin', 0);
   cells[idx(7, 11)] = admin;
 
-  runSimulation(cells);
+  sim(cells);
   assert.equal(admin.level, 1);
-  runSimulation(cells);
+  sim(cells);
   assert.equal(admin.level, 1, 'Verwaltung wächst nie über 1');
 });
 
 test('Einnahmen = INCOME[zone] × level summiert über alle Zonen', () => {
   const cells = emptyCells();
-  road_h(cells, 10, 5, 12);
-  cells[idx(7, 11)] = zone('industrial', 3); // wächst beim Tick auf 3 (Deckel)
-  state.money = 0;
+  road_h(cells, 10, 5, 12);          // 8 Straßenfelder
+  cells[idx(7, 11)] = zone('industrial', 3);
+  state.money = 50_000;
 
-  const income = runSimulation(cells);
-  // Nach dem Tick ist Level 3 → Einnahme = INCOME.industrial * 3
-  assert.equal(income, INCOME.industrial * 3);
-  assert.equal(state.money, income, 'earn() hat das Budget erhöht');
+  const net = sim(cells);
+  // Netto = Brutto-Steuer (Level 3, 10 %) − Unterhalt (Straßen + Zone)
+  const gross  = INCOME.industrial * 3 * 0.10;
+  const upkeep = UPKEEP.road * 8 + UPKEEP.industrial * 3;
+  assert.equal(net, Math.round(gross - upkeep));
+  assert.equal(state.money, 50_000 + net, 'earn() hat das Budget verändert');
 });
 
 test('Bevölkerung steigt mit Wohn-Level', () => {
@@ -105,14 +110,14 @@ test('Bevölkerung steigt mit Wohn-Level', () => {
   cells[idx(6, 11)] = zone('residential', 0);
   cells[idx(9, 11)] = zone('industrial', 2); // Wachstumstreiber
 
-  runSimulation(cells);
+  sim(cells);
   assert.ok(state.population > 0, 'Wohnzone mit Level>0 erzeugt Bevölkerung');
 });
 
-test('runSimulation ignoriert Straßen und leere Zellen', () => {
+test('Straßen erzeugen keine Einnahmen, nur Unterhalt', () => {
   const cells = emptyCells();
-  road_h(cells, 10, 5, 12);
-  const income = runSimulation(cells);
-  assert.equal(income, 0);
+  road_h(cells, 10, 5, 12);          // 8 Straßenfelder, keine Zonen
+  const net = sim(cells);
+  assert.equal(net, -(UPKEEP.road * 8), 'nur Straßenunterhalt');
   assert.equal(state.population, 0);
 });

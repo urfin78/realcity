@@ -8,9 +8,24 @@ gemergt.
 
 Reines Vanilla JS, kein Build — diese Bedingung gilt für jedes Feature.
 
+## Status-Überblick
+
+Deployt: **v0.5.0** (`gh-pages`).
+
+| # | Feature | Status |
+|---|---------|--------|
+| 1 | save-and-ux | ✅ Fertig (PR #2, v0.3.0) |
+| 2 | economy-balance | ✅ Fertig (PR #6, v0.5.0) |
+| 3 | utilities-demand | ⚪ Offen (nur Plan) |
+| 4 | terrain-interaction | 🟡 In Arbeit (Branch `feat/terrain-interaction`) |
+| 5 | version-display | ✅ Fertig (PR #1, v0.2.0) |
+| 6 | map-pipeline | ✅ Fertig (PR #3, v0.4.0); Karte Berlin (PR #4) |
+
 ---
 
 ## 1. `feat/save-and-ux` — Speichern & UX
+
+**Status:** ✅ Fertig — gemergt (PR #2), deployt mit v0.3.0.
 
 **Ziel:** Das Spiel von einer Tech-Demo zu etwas Benutzbarem machen.
 
@@ -29,6 +44,8 @@ neues `src/core/persistence.js`. **Abhängigkeiten:** keine.
 
 ## 2. `feat/economy-balance` — Wirtschaft & Balance
 
+**Status:** ✅ Fertig — gemergt (PR #6), deployt mit v0.5.0.
+
 **Ziel:** Das Budget zur echten Herausforderung machen (aktuell nur Wachstum).
 
 - **Laufender Unterhalt** — Straßen und Zonen kosten pro Tick (skaliert mit Level).
@@ -44,6 +61,8 @@ neues `src/core/persistence.js`. **Abhängigkeiten:** keine.
 ---
 
 ## 3. `feat/utilities-demand` — Versorgung & Bedarf
+
+**Status:** ⚪ Offen — nur Plan-Doc, noch nicht implementiert.
 
 **Ziel:** Klassische SimCity-Tiefe — Zonen brauchen Versorgung und reagieren auf
 Nachfrage.
@@ -64,6 +83,10 @@ Nachfrage.
 
 ## 4. `feat/terrain-interaction` — Terrain-Interaktion
 
+**Status:** 🟡 In Arbeit auf `feat/terrain-interaction` — Kernlogik umgesetzt
+(`src/core/terrain.js`, Verdrahtung in `game.js`/`simulation.js`, Persistenz
+Schema 3). Offen: Tests für `terrain.js` und Commit/PR.
+
 **Ziel:** Die echten Geodaten (Höhe, Wasser, Wald) spielerisch nutzen statt nur
 anzuzeigen.
 
@@ -81,12 +104,47 @@ ableiten), `simulation.js` (Lage-Boni ins Wachstum), evtl.
 
 ---
 
+## 5. `feat/version-display` — Release-Version im Spiel anzeigen
+
+**Status:** ✅ Fertig — gemergt (PR #1), deployt mit v0.2.0.
+
+**Ziel:** Die aktuell deployte Version (`vX.Y.Z`) im Spiel sichtbar machen.
+
+Da es keinen Build gibt, schreibt der Release-Workflow beim Deploy eine
+`version.json` auf `gh-pages`; das Spiel lädt sie und zeigt die Version dezent an
+(Fallback `dev` lokal). Details in
+[features/version-display.md](features/version-display.md).
+
+**Berührt:** `release.yml` (version.json erzeugen), `index.html`/`game.js`
+(laden & anzeigen). **Abhängigkeiten:** keine.
+
+---
+
+## 6. `feat/map-pipeline` — Karten-Pipeline mit automatischem PR
+
+**Status:** ✅ Fertig — gemergt (PR #3), deployt mit v0.4.0; erste Karte Berlin
+generiert (PR #4). Hinweis: Workflow nutzt inzwischen die `gh`-CLI statt einer
+externen Action.
+
+**Ziel:** Neue Karten auf Knopfdruck erzeugen (Karten werden nicht zur Laufzeit
+generiert). Ein `workflow_dispatch`-Workflow ruft `generate_map.py` auf, pflegt
+`maps/index.json` und öffnet via `peter-evans/create-pull-request` automatisch
+einen PR. Kein Auto-Merge. Details in
+[features/map-pipeline.md](features/map-pipeline.md).
+
+**Berührt:** `tools/generate_map.py` (Manifest-Pflege),
+`.github/workflows/new-map.yml`. **Abhängigkeiten:** baut auf `save-and-ux`
+(Manifest + dynamische Städteliste).
+
+---
+
 ## Reihenfolge (Empfehlung)
 
-1. **save-and-ux** zuerst — schafft Abriss, Persistenz und die HUD-Basis, von der
-   die anderen profitieren.
-2. **economy-balance** und **terrain-interaction** parallel möglich (unabhängig).
+1. ~~**save-and-ux** zuerst — schafft Abriss, Persistenz und die HUD-Basis.~~ ✅
+2. **economy-balance** ✅ und **terrain-interaction** (🟡 in Arbeit) — unabhängig,
+   parallel möglich.
 3. **utilities-demand** zuletzt — größtes Feature, nutzt die HUD-Anzeige aus 1.
+   Einziges noch offenes Feature.
 
 Jeder Branch: kleiner, fokussierter PR; CI muss grün sein; Conventional-Commit-
 Titel (`feat: …`), damit der Release-Workflow den Versions-Bump korrekt ableitet.

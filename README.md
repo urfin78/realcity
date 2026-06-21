@@ -1,13 +1,20 @@
 # RealCity
 
+[![CI](https://github.com/urfin78/realcity/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/urfin78/realcity/actions/workflows/ci.yml)
+
+> Dieses Projekt wurde mit Unterstützung von [Claude Code](https://claude.com/claude-code) (Anthropic) erstellt.
+
+**[Jetzt spielen](https://urfin78.github.io/realcity/)** — keine Installation nötig, läuft komplett im Browser.
+
 Ein browserbasierter Städtebauer (SimCity-artig) auf **echtem Terrain**: Höhenrelief
 aus SRTM-Satellitendaten, Wasser und Wald aus OpenStreetMap. Reines Vanilla
 HTML5/JavaScript — **kein npm, kein Node, kein Build-Schritt** zur Laufzeit.
 
 ## Spielen
 
-Die jeweils veröffentlichte Version läuft auf GitHub Pages
-(nach dem ersten Release unter `https://urfin78.github.io/realcity/`).
+Die jeweils veröffentlichte Version läuft auf GitHub Pages unter
+**[urfin78.github.io/realcity](https://urfin78.github.io/realcity/)**
+(verfügbar nach dem ersten Release).
 Zum Spielen ist **keinerlei Installation** nötig — es ist eine statische Seite.
 
 ## Lokal entwickeln
@@ -111,8 +118,3 @@ abgeleitete Datenbank unter der **ODbL** — Details und Pflichten in
 ## Lizenz
 
 Quellcode: [MIT](LICENSE). Kartendaten: ODbL / Public Domain (siehe oben).
-
----
-
-> 🤖 Dieses Projekt wurde mit Unterstützung von [Claude Code](https://claude.com/claude-code)
-> (Anthropic) erstellt.
