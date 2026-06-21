@@ -26,7 +26,44 @@
     #hud .hud-sep { height: 1px; background: rgba(255,255,255,0.12); margin: 3px 0; }
     #hud-cashflow.pos { color: #7fd87f; }
     #hud-cashflow.neg { color: #e88; }
+    #hud .debt { color: #e0a060; }
     #tile-info  { font-size: 11px; opacity: 0.55; margin-top: 2px; }
+
+    /* Wirtschafts-Panel: Steuer-Regler + Kredit */
+    #economy {
+      position: fixed; top: 10px; right: 10px;
+      background: rgba(0,0,0,0.65); padding: 10px 14px;
+      border-radius: 6px; font-size: 12px; width: 210px;
+      display: flex; flex-direction: column; gap: 7px;
+    }
+    #economy h3 { font-size: 11px; opacity: 0.6; font-weight: normal; text-transform: uppercase; letter-spacing: 0.5px; }
+    #economy .tax-row { display: flex; align-items: center; gap: 8px; }
+    #economy .tax-row label { flex: 0 0 64px; opacity: 0.8; }
+    #economy .tax-row input[type=range] { flex: 1; min-width: 0; accent-color: #5b9bd5; }
+    #economy .tax-row .pct { flex: 0 0 34px; text-align: right; font-weight: bold; }
+    #economy .eco-sep { height: 1px; background: rgba(255,255,255,0.12); margin: 1px 0; }
+    #economy .loan-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+    #economy button {
+      background: #2a2a2a; color: #ccc; border: 1px solid #444;
+      padding: 4px 9px; border-radius: 5px; cursor: pointer; font-size: 12px;
+    }
+    #economy button:hover { background: #3a3a3a; color: #fff; }
+
+    /* Game-Over-Overlay */
+    #gameover {
+      position: fixed; inset: 0; z-index: 20;
+      background: rgba(0,0,0,0.82);
+      display: none; flex-direction: column; align-items: center; justify-content: center;
+      gap: 18px; text-align: center;
+    }
+    #gameover.show { display: flex; }
+    #gameover h1 { color: #e05555; font-size: 42px; letter-spacing: 1px; }
+    #gameover p  { color: #ccc; font-size: 15px; max-width: 360px; line-height: 1.5; }
+    #gameover button {
+      background: #1a4a8a; color: #fff; border: 1px solid #3a6abf;
+      padding: 10px 22px; border-radius: 6px; cursor: pointer; font-size: 15px;
+    }
+    #gameover button:hover { background: #225aa8; }
 
     #toolbar {
       position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
@@ -82,6 +119,10 @@
       <span class="label">Saldo/Tick</span>
       <span class="value" id="hud-cashflow">±0 €</span>
     </div>
+    <div class="row">
+      <span class="label">Schulden</span>
+      <span class="value debt" id="hud-debt">0 €</span>
+    </div>
     <div class="hud-sep"></div>
     <div class="row small">
       <span class="label">Zonen (W/G/I/V)</span>
@@ -92,6 +133,36 @@
       <span class="value" id="hud-roads">0</span>
     </div>
     <div id="tile-info">—</div>
+  </div>
+
+  <div id="economy">
+    <h3>Steuersätze</h3>
+    <div class="tax-row">
+      <label>Wohnen</label>
+      <input type="range" id="tax-residential" min="0" max="20" step="1" value="10">
+      <span class="pct" id="tax-residential-pct">10 %</span>
+    </div>
+    <div class="tax-row">
+      <label>Gewerbe</label>
+      <input type="range" id="tax-commercial" min="0" max="20" step="1" value="10">
+      <span class="pct" id="tax-commercial-pct">10 %</span>
+    </div>
+    <div class="tax-row">
+      <label>Industrie</label>
+      <input type="range" id="tax-industrial" min="0" max="20" step="1" value="10">
+      <span class="pct" id="tax-industrial-pct">10 %</span>
+    </div>
+    <div class="eco-sep"></div>
+    <div class="loan-row">
+      <span>Kredit (+50k €)</span>
+      <button id="loan-btn">Aufnehmen</button>
+    </div>
+  </div>
+
+  <div id="gameover">
+    <h1>Bankrott</h1>
+    <p>Die Stadtkasse war zu lange im Minus. Setze die Stadt zurück und versuche es mit niedrigeren Ausgaben oder höheren Steuern erneut.</p>
+    <button id="gameover-reset">Stadt zurücksetzen</button>
   </div>
 
   <!-- Pflicht-Attribution: Kartendaten unter ODbL / Public Domain -->

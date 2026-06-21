@@ -36,6 +36,34 @@ test('Round-Trip: serialize → deserialize erhält Zellen und state', () => {
   assert.equal(out[idx(0, 0)], null);
 });
 
+test('Round-Trip: Wirtschaftsfelder (Steuer, Schulden, Bankrott) bleiben erhalten', () => {
+  const cells = emptyCells();
+  cells[idx(1, 1)] = road();
+  const state = {
+    money: 5_000, population: 0, tick: 3,
+    taxRates: { residential: 0.05, commercial: 0.15, industrial: 0.2 },
+    debt: 12_345, brokeTicks: 2, gameOver: false,
+  };
+  const { state: out } = deserialize(serialize(cells, state));
+  assert.equal(out.taxRates.residential, 0.05);
+  assert.equal(out.taxRates.commercial, 0.15);
+  assert.equal(out.taxRates.industrial, 0.2);
+  assert.equal(out.debt, 12_345);
+  assert.equal(out.brokeTicks, 2);
+  assert.equal(out.gameOver, false);
+});
+
+test('deserialize: altes Schema-1-Format bekommt Wirtschafts-Defaults', () => {
+  const old = JSON.stringify({
+    schema: 1, grid: GAME_GRID, money: 9_000, population: 10, tick: 4,
+    cells: [[idx(2, 2), 'r', 1]],
+  });
+  const { state } = deserialize(old);
+  assert.equal(state.debt, 0);
+  assert.equal(state.gameOver, false);
+  assert.equal(state.taxRates.residential, 0.1, 'Default-Steuer 10 %');
+});
+
 test('serialize speichert nur belegte Zellen (kompakt)', () => {
   const cells = emptyCells();
   cells[idx(1, 1)] = road();

@@ -1,9 +1,12 @@
 // RealCity — Hauptspiel
 
-import { state, spend, earn, startTicks, onTick, applyState, resetState, COSTS } from './state.js';
+import { state, spend, earn, startTicks, onTick, applyState, resetState,
+         setTaxRate, takeLoan, COSTS, TAX_MAX } from './state.js';
 import { runSimulation } from './simulation.js';
 import { isConnected, hasRoadNeighbor } from './network.js';
 import { save, load, clear } from './persistence.js';
+
+const LOAN_AMOUNT = 50_000;
 
 const canvas    = document.getElementById('gameCanvas');
 const ctx       = canvas.getContext('2d');
@@ -14,9 +17,13 @@ const hudTick   = document.getElementById('hud-tick');
 const hudCash   = document.getElementById('hud-cashflow');
 const hudZones  = document.getElementById('hud-zones');
 const hudRoads  = document.getElementById('hud-roads');
+const hudDebt   = document.getElementById('hud-debt');
 const loadBtn   = document.getElementById('load-btn');
 const resetBtn  = document.getElementById('reset-btn');
 const citySelect= document.getElementById('city-select');
+const loanBtn   = document.getElementById('loan-btn');
+const gameoverEl     = document.getElementById('gameover');
+const gameoverReset  = document.getElementById('gameover-reset');
 
 // Anteil der Baukosten, der beim Abriss erstattet wird
 const REFUND = 0.5;
@@ -150,7 +157,36 @@ function updateHUD() {
   }
   hudZones.textContent = `${r}/${c}/${ind}/${a}`;
   hudRoads.textContent = roads;
+
+  hudDebt.textContent = Math.round(state.debt).toLocaleString('de-DE') + ' €';
+
+  // Game-Over-Overlay ein-/ausblenden
+  gameoverEl.classList.toggle('show', state.gameOver === true);
 }
+
+// --- Steuer-Regler: Slider-Position aus dem State spiegeln ---
+const TAX_ZONES = ['residential', 'commercial', 'industrial'];
+function syncTaxSliders() {
+  for (const z of TAX_ZONES) {
+    const slider = document.getElementById(`tax-${z}`);
+    const pct    = document.getElementById(`tax-${z}-pct`);
+    if (!slider || !pct) continue;
+    const percent = Math.round((state.taxRates[z] ?? 0) * 100);
+    slider.value = percent;
+    pct.textContent = `${percent} %`;
+  }
+}
+
+TAX_ZONES.forEach(z => {
+  const slider = document.getElementById(`tax-${z}`);
+  if (!slider) return;
+  slider.addEventListener('input', () => {
+    const percent = Math.max(0, Math.min(TAX_MAX * 100, Number(slider.value)));
+    setTaxRate(z, percent / 100);
+    document.getElementById(`tax-${z}-pct`).textContent = `${percent} %`;
+    autoSave();
+  });
+});
 
 // --- Render ---
 function draw() {
@@ -249,6 +285,7 @@ async function loadMap(city) {
     camera.y    = map.grid / 2;
     camera.zoom = Math.min(canvas.width, canvas.height) / map.grid;
     startTicks(5000);
+    syncTaxSliders();
     updateHUD();
     draw();
   } catch (e) {
@@ -291,7 +328,9 @@ onTick(() => {
   lastIncome = runSimulation(cells);
   updateHUD();
   draw();
-  if (lastIncome > 0) tileInfo.textContent = `Tick ${state.tick} — +${lastIncome.toLocaleString('de-DE')} €`;
+  const sign = lastIncome >= 0 ? '+' : '−';
+  tileInfo.textContent = `Tick ${state.tick} — ${sign}${Math.abs(lastIncome).toLocaleString('de-DE')} €`;
+  if (state.gameOver) tileInfo.textContent = 'Bankrott — Spiel beendet';
   autoSave();
 });
 
@@ -401,18 +440,37 @@ canvas.addEventListener('click', e => {
   autoSave();
 });
 
-// --- Reset-Button ---
-resetBtn.addEventListener('click', () => {
+// --- Kredit aufnehmen ---
+loanBtn.addEventListener('click', () => {
   if (!currentCity) { tileInfo.textContent = 'Erst eine Stadt laden'; return; }
-  if (!confirm('Stadt wirklich zurücksetzen? Der Spielstand geht verloren.')) return;
+  if (state.gameOver) return;
+  takeLoan(LOAN_AMOUNT);
+  tileInfo.textContent = `Kredit aufgenommen (+${LOAN_AMOUNT.toLocaleString('de-DE')} €) — Schulden steigen`;
+  updateHUD();
+  autoSave();
+});
+
+// --- Reset-Button ---
+function resetCity() {
+  if (!currentCity) { tileInfo.textContent = 'Erst eine Stadt laden'; return false; }
   clear(currentCity);
   cells = new Array(GAME_GRID * GAME_GRID).fill(null);
   resetState();
   lastIncome = 0;
   tileInfo.textContent = `${map?.name ?? currentCity} zurückgesetzt`;
+  syncTaxSliders();
   updateHUD();
   draw();
+  return true;
+}
+
+resetBtn.addEventListener('click', () => {
+  if (!currentCity) { tileInfo.textContent = 'Erst eine Stadt laden'; return; }
+  if (!confirm('Stadt wirklich zurücksetzen? Der Spielstand geht verloren.')) return;
+  resetCity();
 });
+
+gameoverReset.addEventListener('click', () => { resetCity(); });
 
 // --- Drag ---
 let drag = null, dragMoved = false;
