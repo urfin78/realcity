@@ -3,6 +3,7 @@
 export const COSTS = {
   road:        500,
   zone:       1000,
+  power:      5000,   // Kraftwerk — teuer, versorgt aber viele Zonen
 };
 
 // Brutto-Einnahmen einer Zone pro Tick = INCOME[zone] × level × taxRate.
@@ -21,6 +22,7 @@ export const UPKEEP = {
   commercial:   50,
   industrial:   70,
   admin:       150,  // Verwaltung ist teuer, wirft aber keine Einnahmen ab
+  power:       200,  // Kraftwerk: hoher Betriebsunterhalt
 };
 
 // Steuer: zulässiger Bereich und Default je Zonentyp (Anteil 0.0–0.2).
@@ -51,6 +53,8 @@ export const state = {
   debt:         0,
   brokeTicks:   0,      // aufeinanderfolgende Ticks mit money < Schwelle
   gameOver:     false,
+  // RCI-Nachfrage, je Tick aus dem Zonen-Mix neu berechnet (für die HUD-Balken).
+  demand:       { residential: 0, commercial: 0, industrial: 0 },
 };
 
 // Callbacks die nach jedem Tick ausgeführt werden
@@ -150,4 +154,5 @@ export function resetState() {
   state.debt = 0;
   state.brokeTicks = 0;
   state.gameOver = false;
+  state.demand = { residential: 0, commercial: 0, industrial: 0 };
 }
