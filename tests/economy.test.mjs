@@ -85,14 +85,15 @@ test('Kredit: takeLoan erhöht Budget und Schulden', () => {
 
 test('Kredit: serviceLoan tilgt und verzinst über Ticks', () => {
   state.money = 100_000;
-  takeLoan(10_000);
+  takeLoan(10_000);                 // Budget → 110_000, debt → 10_000
+  const before = state.money;
   const repay = serviceLoan();
   // Schuld nach Zins: 10_000 * 1.02 = 10_200; Tilgung 5 % = 510
   const afterInterest = 10_000 * (1 + LOAN_INTEREST);
   const expectedRepay = afterInterest * LOAN_REPAYMENT;
   assert.ok(Math.abs(repay - expectedRepay) < 1e-6);
   assert.ok(Math.abs(state.debt - (afterInterest - expectedRepay)) < 1e-6);
-  assert.ok(state.money < 100_000, 'Tilgung mindert das Budget');
+  assert.ok(Math.abs((before - state.money) - repay) < 1e-6, 'Tilgung mindert das Budget genau um repay');
 });
 
 test('Kredit: Schuld sinkt über viele Ticks gegen 0', () => {
