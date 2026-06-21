@@ -26,6 +26,8 @@ HTML5/JavaScript — **kein npm, kein Node, kein Build-Schritt** zur Laufzeit.
 
 Spielstände werden je Stadt automatisch im Browser (`localStorage`) gespeichert.
 
+➡️ **Kurze Schritt-für-Schritt-Anleitung:** [docs/SPIELANLEITUNG.md](docs/SPIELANLEITUNG.md)
+
 ## Spielen
 
 Die jeweils veröffentlichte Version läuft auf GitHub Pages unter
