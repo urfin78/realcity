@@ -62,11 +62,12 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: maps/*.json müssen gültiges JSON mit Pflichtfeldern sein
+      - name: Karten-JSON müssen gültig sein mit Pflichtfeldern
         run: |
           fail=0
           for f in maps/*.json; do
             [ -e "$f" ] || continue
+            case "$f" in maps/index.json) continue;; esac  # Manifest separat prüfen
             python3 - "$f" <<'PY' || fail=1
           import json, sys
           f = sys.argv[1]
@@ -79,3 +80,22 @@ jobs:
           PY
           done
           exit $fail
+
+      - name: Manifest maps/index.json — jede gelistete Karte muss existieren
+        run: |
+          python3 - <<'PY'
+          import json, os, sys
+          m = json.load(open("maps/index.json"))
+          maps = m.get("maps", [])
+          assert maps, "Manifest enthält keine Karten"
+          bad = 0
+          for entry in maps:
+              mid = entry.get("id")
+              assert mid and "name" in entry, f"Eintrag unvollständig: {entry}"
+              path = f"maps/{mid}.json"
+              if not os.path.exists(path):
+                  print(f"FEHLT: {path} (im Manifest gelistet)"); bad += 1
+              else:
+                  print(f"OK: {mid}")
+          sys.exit(1 if bad else 0)
+          PY

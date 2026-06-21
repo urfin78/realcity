@@ -81,6 +81,34 @@ ableiten), `simulation.js` (Lage-Boni ins Wachstum), evtl.
 
 ---
 
+## 5. `feat/version-display` — Release-Version im Spiel anzeigen
+
+**Ziel:** Die aktuell deployte Version (`vX.Y.Z`) im Spiel sichtbar machen.
+
+Da es keinen Build gibt, schreibt der Release-Workflow beim Deploy eine
+`version.json` auf `gh-pages`; das Spiel lädt sie und zeigt die Version dezent an
+(Fallback `dev` lokal). Details in
+[features/version-display.md](features/version-display.md).
+
+**Berührt:** `release.yml` (version.json erzeugen), `index.html`/`game.js`
+(laden & anzeigen). **Abhängigkeiten:** keine.
+
+---
+
+## 6. `feat/map-pipeline` — Karten-Pipeline mit automatischem PR
+
+**Ziel:** Neue Karten auf Knopfdruck erzeugen (Karten werden nicht zur Laufzeit
+generiert). Ein `workflow_dispatch`-Workflow ruft `generate_map.py` auf, pflegt
+`maps/index.json` und öffnet via `peter-evans/create-pull-request` automatisch
+einen PR. Kein Auto-Merge. Details in
+[features/map-pipeline.md](features/map-pipeline.md).
+
+**Berührt:** `tools/generate_map.py` (Manifest-Pflege),
+`.github/workflows/new-map.yml`. **Abhängigkeiten:** baut auf `save-and-ux`
+(Manifest + dynamische Städteliste).
+
+---
+
 ## Reihenfolge (Empfehlung)
 
 1. **save-and-ux** zuerst — schafft Abriss, Persistenz und die HUD-Basis, von der
