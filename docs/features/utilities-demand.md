@@ -39,3 +39,22 @@ Siehe [ROADMAP](../ROADMAP.md) §3. Größtes Feature — klassische SimCity-Tie
 - Zonen ohne Kraftwerk wachsen nicht; nach Kraftwerksbau wachsen sie.
 - RCI-Anzeige verändert sich mit dem Zonen-Mix.
 - CI grün, Conventional-Commit-Titel.
+
+## Umsetzung (Stand der Implementierung)
+- **Kraftwerk:** Zelltyp `power`, Tool `power`, Baukosten 5.000 €, Unterhalt
+  200 €/Tick (`COSTS.power`/`UPKEEP.power`). Wird wie eine Straße gesetzt
+  (Infrastruktur, kein Straßen-Nachbar nötig), Hang-Aufschlag gilt.
+- **Versorgungs-BFS** (`computePowered`): Strom fließt vom Kraftwerk über
+  Conductor-Tiles (Kraftwerk/Straße/Zone, 4er-Nachbarschaft, generischer
+  `bfsFlood` aus `network.js`). Pro zusammenhängender Komponente summiert sich
+  die Kapazität aller enthaltenen Kraftwerke (`POWER_CAPACITY = 30` je Werk);
+  Zonen werden in Index-Reihenfolge (deterministisch) bis zur Kapazität
+  versorgt. Zonenbedarf = `max(level, 1)`.
+- **Unversorgte Zonen** wachsen nicht und verfallen pro Tick (wie ohne
+  Straßenanbindung); Verwaltung braucht ebenfalls Strom.
+- **RCI-Nachfrage** (`computeDemand`): Soll-Mix Wohnen/Gewerbe/Industrie =
+  0,5/0,2/0,3. Pro Typ `demand = clamp((ideal − ist) / ideal, −1, 1)`; leere
+  Stadt → Wohn-Nachfrage +1. `demandFactor` skaliert die Wachstumschance
+  (`1 + 0.5·demand`, ≥ 0). `state.demand` wird je Tick neu gesetzt (nicht
+  persistiert) und treibt die HUD-Balken.
+- **Persistenz:** Schema 4 (Kraftwerk-Code `P`); Schemata 1–3 bleiben ladbar.

@@ -12,8 +12,9 @@ const idx = (gx, gy) => gy * GRID + gx;
 function emptyCells() {
   return new Array(GRID * GRID).fill(null);
 }
-const road = () => ({ type: 'road', level: 0 });
-const zone = (z, level = 0) => ({ type: 'zone', zone: z, level });
+const road  = () => ({ type: 'road', level: 0 });
+const power = () => ({ type: 'power', level: 0 });
+const zone  = (z, level = 0) => ({ type: 'zone', zone: z, level });
 
 // Diese Tests prüfen die Wachstumslogik unabhängig vom Steuer-Würfel:
 // alwaysGrow erzwingt das Wachstum, wenn die Bedingungen erfüllt sind.
@@ -24,9 +25,14 @@ beforeEach(() => {
   resetState();
 });
 
-/** Legt eine horizontale Straße y, x=x0..x1 an. */
+/**
+ * Legt eine horizontale Straße y, x=x0..x1 an und hängt ein Kraftwerk daran,
+ * damit die angeschlossenen Zonen mit Strom versorgt sind (Voraussetzung fürs
+ * Wachstum). Das Kraftwerk sitzt oberhalb des linken Straßenendes.
+ */
 function road_h(cells, y, x0, x1) {
   for (let x = x0; x <= x1; x++) cells[idx(x, y)] = road();
+  cells[idx(x0, y - 1)] = power();
 }
 
 test('Industrie an Straße wächst pro Tick (0→1→2→3, dann Deckel)', () => {
@@ -97,9 +103,10 @@ test('Einnahmen = INCOME[zone] × level summiert über alle Zonen', () => {
   state.money = 50_000;
 
   const net = sim(cells);
-  // Netto = Brutto-Steuer (Level 3, 10 %) − Unterhalt (Straßen + Zone)
+  // Netto = Brutto-Steuer (Level 3, 10 %) − Unterhalt (Straßen + Kraftwerk + Zone).
+  // road_h hängt ein Kraftwerk an die Straße (Stromversorgung).
   const gross  = INCOME.industrial * 3 * 0.10;
-  const upkeep = UPKEEP.road * 8 + UPKEEP.industrial * 3;
+  const upkeep = UPKEEP.road * 8 + UPKEEP.power + UPKEEP.industrial * 3;
   assert.equal(net, Math.round(gross - upkeep));
   assert.equal(state.money, 50_000 + net, 'earn() hat das Budget verändert');
 });
@@ -116,8 +123,9 @@ test('Bevölkerung steigt mit Wohn-Level', () => {
 
 test('Straßen erzeugen keine Einnahmen, nur Unterhalt', () => {
   const cells = emptyCells();
-  road_h(cells, 10, 5, 12);          // 8 Straßenfelder, keine Zonen
+  road_h(cells, 10, 5, 12);          // 8 Straßenfelder + Kraftwerk, keine Zonen
   const net = sim(cells);
-  assert.equal(net, -(UPKEEP.road * 8), 'nur Straßenunterhalt');
+  // Unterhalt aus Straßen und dem von road_h angehängten Kraftwerk.
+  assert.equal(net, -(UPKEEP.road * 8 + UPKEEP.power), 'nur Infrastruktur-Unterhalt');
   assert.equal(state.population, 0);
 });

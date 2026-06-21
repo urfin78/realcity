@@ -4,7 +4,7 @@
 // damit sie mit node:test prüfbar sind. save/load kapseln localStorage.
 
 export const GAME_GRID = 64;
-const SCHEMA = 3;          // 3: Terrain (clearedForest); 2: Wirtschaft
+const SCHEMA = 4;          // 4: Versorgung (Kraftwerke); 3: Terrain; 2: Wirtschaft
 const KEY_PREFIX = 'realcity:';
 
 const TAX_ZONES = ['residential', 'commercial', 'industrial'];
@@ -12,13 +12,15 @@ const TAX_ZONES = ['residential', 'commercial', 'industrial'];
 /**
  * Wandelt Spielzustand in einen kompakten JSON-String.
  * Nur belegte Zellen werden gespeichert: [index, kurzcode, level].
- * Kurzcode: 'R' road, 'r' residential, 'c' commercial, 'i' industrial, 'a' admin.
+ * Kurzcode: 'R' road, 'P' Kraftwerk, 'r' residential, 'c' commercial,
+ * 'i' industrial, 'a' admin.
  */
 const ZONE_CODE = { residential: 'r', commercial: 'c', industrial: 'i', admin: 'a' };
 const CODE_ZONE = { r: 'residential', c: 'commercial', i: 'industrial', a: 'admin' };
 
 function cellCode(cell) {
-  if (cell.type === 'road') return 'R';
+  if (cell.type === 'road')  return 'R';
+  if (cell.type === 'power') return 'P';
   return ZONE_CODE[cell.zone] ?? null;
 }
 
@@ -59,7 +61,7 @@ export function deserialize(json) {
   const data = JSON.parse(json); // wirft bei kaputtem JSON
   // Schema 1 (vor Wirtschaft) und 2 (vor Terrain) bleiben ladbar; fehlende
   // Felder erhalten unten Defaults.
-  if (![1, 2, SCHEMA].includes(data.schema)) throw new Error(`Unbekanntes Schema: ${data.schema}`);
+  if (![1, 2, 3, SCHEMA].includes(data.schema)) throw new Error(`Unbekanntes Schema: ${data.schema}`);
   if (data.grid !== GAME_GRID) throw new Error(`Grid-Größe ${data.grid} ≠ ${GAME_GRID}`);
   if (!Array.isArray(data.cells)) throw new Error('cells fehlt oder ist kein Array');
 
@@ -69,6 +71,8 @@ export function deserialize(json) {
     if (i < 0 || i >= cells.length) throw new Error(`Zell-Index außerhalb: ${i}`);
     if (code === 'R') {
       cells[i] = { type: 'road', level: 0 };
+    } else if (code === 'P') {
+      cells[i] = { type: 'power', level: 0 };
     } else if (CODE_ZONE[code]) {
       cells[i] = { type: 'zone', zone: CODE_ZONE[code], level: Math.max(0, Math.min(3, level | 0)) };
     } else {

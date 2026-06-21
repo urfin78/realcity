@@ -20,6 +20,7 @@ test('Round-Trip: serialize → deserialize erhält Zellen und state', () => {
   cells[idx(5, 6)] = zone('residential', 2);
   cells[idx(7, 7)] = zone('industrial', 3);
   cells[idx(9, 9)] = zone('admin', 1);
+  cells[idx(8, 8)] = { type: 'power', level: 0 };
   const state = { money: 42_000, population: 350, tick: 17 };
 
   const { cells: out, state: outState } = deserialize(serialize(cells, state));
@@ -32,6 +33,7 @@ test('Round-Trip: serialize → deserialize erhält Zellen und state', () => {
   assert.deepEqual(out[idx(5, 6)], { type: 'zone', zone: 'residential', level: 2 });
   assert.deepEqual(out[idx(7, 7)], { type: 'zone', zone: 'industrial', level: 3 });
   assert.deepEqual(out[idx(9, 9)], { type: 'zone', zone: 'admin', level: 1 });
+  assert.deepEqual(out[idx(8, 8)], { type: 'power', level: 0 });
   // Unbelegte Zellen bleiben null
   assert.equal(out[idx(0, 0)], null);
 });

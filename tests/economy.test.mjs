@@ -13,8 +13,16 @@ const GRID = 64;
 const idx = (gx, gy) => gy * GRID + gx;
 
 function emptyCells() { return new Array(GRID * GRID).fill(null); }
-const road = () => ({ type: 'road', level: 0 });
-const zone = (z, level = 0) => ({ type: 'zone', zone: z, level });
+const road  = () => ({ type: 'road', level: 0 });
+const power = () => ({ type: 'power', level: 0 });
+const zone  = (z, level = 0) => ({ type: 'zone', zone: z, level });
+
+// Legt eine Straße y, x0..x1 + ein angehängtes Kraftwerk an (Stromversorgung,
+// Voraussetzung dafür, dass Zonen wachsen bzw. ihr Level halten).
+function poweredRoad(cells, y, x0, x1) {
+  for (let x = x0; x <= x1; x++) cells[idx(x, y)] = road();
+  cells[idx(x0, y - 1)] = power();
+}
 
 // deterministischer RNG: ≥ jede Wahrscheinlichkeit → kein Wachstums-Wurf trifft.
 const neverGrow = () => 0.999;
@@ -32,17 +40,17 @@ test('Unterhalt: leere Straße zieht UPKEEP.road vom Budget ab', () => {
 
 test('Netto-Cashflow = Steuereinnahme − Unterhalt', () => {
   const cells = emptyCells();
-  // Eine Industrie-Zone Level 3 an Straße, Steuer 10 %.
-  for (let x = 3; x <= 8; x++) cells[idx(x, 10)] = road();
+  // Eine Industrie-Zone Level 3 an Straße + Kraftwerk, Steuer 10 %.
+  poweredRoad(cells, 10, 3, 8);
   cells[idx(5, 11)] = zone('industrial', 3);
   setTaxRate('industrial', 0.10);
   state.money = 50_000;
 
-  // neverGrow: Level bleibt 3 (kein Wachstum, kein Schrumpfen da verbunden)
+  // neverGrow: Level bleibt 3 (kein Wachstum, kein Schrumpfen da verbunden+versorgt)
   const net = runSimulation(cells, neverGrow);
 
   const gross  = INCOME.industrial * 3 * 0.10;
-  const upkeep = UPKEEP.road * 6 + UPKEEP.industrial * 3;
+  const upkeep = UPKEEP.road * 6 + UPKEEP.power + UPKEEP.industrial * 3;
   assert.equal(net, Math.round(gross - upkeep));
 });
 
@@ -50,7 +58,7 @@ test('Höhere Steuer → mehr Brutto-Einnahme bei gleichem Level', () => {
   function netAtTax(rate) {
     resetState();
     const cells = emptyCells();
-    for (let x = 3; x <= 8; x++) cells[idx(x, 10)] = road();
+    poweredRoad(cells, 10, 3, 8);
     cells[idx(5, 11)] = zone('industrial', 3);
     setTaxRate('industrial', rate);
     return runSimulation(cells, neverGrow);
@@ -62,10 +70,15 @@ test('Höhere Steuer → mehr Brutto-Einnahme bei gleichem Level', () => {
 test('Steuer bremst Wachstum: bei 0 % wächst es, RNG-Schwelle sinkt mit Steuer', () => {
   // Bei voller Steuer (20 %) liegt die Wachstumschance bei 0.4.
   // Ein RNG-Wert von 0.5 lässt bei 0 % wachsen, bei 20 % nicht.
+  // Ausgewogener Zonen-Mix → RCI-Nachfrage neutral (Faktor ≈ 1), damit der
+  // Test nur den Steuer-Effekt misst (sonst würde die Nachfrage die Chance
+  // zusätzlich skalieren).
   function grewWithTax(rate) {
     resetState();
     const cells = emptyCells();
-    for (let x = 3; x <= 8; x++) cells[idx(x, 10)] = road();
+    poweredRoad(cells, 10, 3, 8);
+    cells[idx(4, 11)] = zone('residential', 1);
+    cells[idx(6, 11)] = zone('commercial', 1);
     const z = zone('industrial', 0);
     cells[idx(5, 11)] = z;
     setTaxRate('industrial', rate);
