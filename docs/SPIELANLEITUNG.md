@@ -6,12 +6,21 @@ fließen, Unterhalt und Kredite werden abgebucht.
 
 ## In 30 Sekunden loslegen
 
-1. Oben rechts eine **Stadt wählen** und **„Laden"** klicken.
+1. In der **Werkzeugleiste unten** eine **Stadt wählen** und **„Laden"** klicken.
 2. Werkzeug **Straße** wählen und eine kurze Straße ziehen (Klick je Feld).
 3. Ein **Kraftwerk** an die Straße setzen — ohne Strom wächst nichts.
 4. Direkt an der Straße **Wohnen** und daneben **Gewerbe**/**Industrie** setzen.
 5. Zuschauen: Mit Straße + Strom + passender Nachbarschaft steigen die Zonen
    über die Ticks von Stufe 0 auf bis zu 3 und werfen Steuern ab.
+
+## Bildschirm-Aufteilung
+
+- **Oben links:** Statusanzeige (Budget, Bevölkerung, Tick, Saldo, Schulden,
+  Zonen-/Straßen-Zähler) und die **RCI-Balken**.
+- **Oben rechts:** Wirtschafts-Panel mit den **Steuer-Reglern** und dem
+  **Kredit**-Knopf.
+- **Unten mittig:** Werkzeugleiste mit **Stadtauswahl**, **„Laden"**, **„Neu"**
+  und allen Bau-Werkzeugen.
 
 ## Steuerung
 
@@ -57,7 +66,7 @@ Ein Kraftwerk liefert **30 Versorgungseinheiten** und speist alle Zonen, die üb
 Straßen/Zonen mit ihm verbunden sind. Jede Zone braucht so viel Strom wie ihre
 Stufe (mind. 1). Reicht die Kapazität nicht, bleiben die überzähligen Zonen
 unversorgt — baue dann ein weiteres Kraftwerk (Kapazität im selben Netz addiert
-sich). Im **Inspect** zeigt ein „⚡✗" eine zonen­ohne Strom an.
+sich). Im **Inspect** kennzeichnet „⚡✗" eine Zone ohne Strom.
 
 ## Nachfrage (RCI)
 
@@ -68,7 +77,7 @@ grob als Ziel **Wohnen : Gewerbe : Industrie ≈ 50 : 20 : 30**.
 
 ## Geld im Griff behalten
 
-- **Steuersätze** (0–20 %, je Zonentyp im Panel links): höher = mehr Einnahmen,
+- **Steuersätze** (0–20 %, je Zonentyp im Panel oben rechts): höher = mehr Einnahmen,
   aber langsameres Wachstum. Start ist 10 %.
 - **Unterhalt** läuft pro Tick für Straßen, Zonen, Verwaltung und Kraftwerke.
 - **Kredit** „+50.000 €" gibt es auf Knopfdruck — kostet aber Zins und Tilgung
