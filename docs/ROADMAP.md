@@ -10,14 +10,14 @@ Reines Vanilla JS, kein Build — diese Bedingung gilt für jedes Feature.
 
 ## Status-Überblick
 
-Deployt: **v0.5.0** (`gh-pages`).
+Deployt: **v0.7.0** (`gh-pages`). **Alle Roadmap-Features sind umgesetzt.** 🎉
 
 | # | Feature | Status |
 |---|---------|--------|
 | 1 | save-and-ux | ✅ Fertig (PR #2, v0.3.0) |
 | 2 | economy-balance | ✅ Fertig (PR #6, v0.5.0) |
-| 3 | utilities-demand | 🟡 In Arbeit (Branch `feat/utilities-demand`) |
-| 4 | terrain-interaction | ✅ Fertig (PR #8) |
+| 3 | utilities-demand | ✅ Fertig (PR #9, v0.7.0) |
+| 4 | terrain-interaction | ✅ Fertig (PR #8, v0.6.0) |
 | 5 | version-display | ✅ Fertig (PR #1, v0.2.0) |
 | 6 | map-pipeline | ✅ Fertig (PR #3, v0.4.0); Karte Berlin (PR #4) |
 
@@ -62,10 +62,10 @@ neues `src/core/persistence.js`. **Abhängigkeiten:** keine.
 
 ## 3. `feat/utilities-demand` — Versorgung & Bedarf
 
-**Status:** 🟡 In Arbeit auf `feat/utilities-demand` — Strom-Versorgungs-BFS
+**Status:** ✅ Fertig — gemergt (PR #9), deployt mit v0.7.0. Strom-Versorgungs-BFS
 (`src/core/utilities.js`, Kraftwerk-Tool, Kapazitätsgrenze), RCI-Nachfrage als
-Wachstumsfaktor und RCI-Balken im HUD umgesetzt; Persistenz Schema 4. Tests in
-`tests/utilities.test.mjs`. Offen: Commit/PR + grüne CI.
+Wachstumsfaktor und RCI-Balken im HUD; Persistenz Schema 4. Tests in
+`tests/utilities.test.mjs`.
 
 **Ziel:** Klassische SimCity-Tiefe — Zonen brauchen Versorgung und reagieren auf
 Nachfrage.
@@ -86,9 +86,9 @@ Nachfrage.
 
 ## 4. `feat/terrain-interaction` — Terrain-Interaktion
 
-**Status:** ✅ Fertig — gemergt (PR #8). Hang-Aufschlag, Wasser-/Wald-Lage-Boni,
-Wald-Rodung; `src/core/terrain.js`, Persistenz Schema 3, Tests in
-`tests/terrain.test.mjs`.
+**Status:** ✅ Fertig — gemergt (PR #8), deployt mit v0.6.0. Hang-Aufschlag,
+Wasser-/Wald-Lage-Boni, Wald-Rodung; `src/core/terrain.js`, Persistenz Schema 3,
+Tests in `tests/terrain.test.mjs`.
 
 **Ziel:** Die echten Geodaten (Höhe, Wasser, Wald) spielerisch nutzen statt nur
 anzuzeigen.
@@ -145,8 +145,10 @@ einen PR. Kein Auto-Merge. Details in
 
 1. ~~**save-and-ux** zuerst — schafft Abriss, Persistenz und die HUD-Basis.~~ ✅
 2. ~~**economy-balance** und **terrain-interaction** — unabhängig, parallel.~~ ✅
-3. **utilities-demand** zuletzt — größtes Feature, nutzt die HUD-Anzeige aus 1.
-   🟡 In Arbeit (`feat/utilities-demand`) — letztes Feature der Roadmap.
+3. ~~**utilities-demand** zuletzt — größtes Feature, nutzt die HUD-Anzeige aus 1.~~ ✅
+
+**Alle sechs Features sind umgesetzt und deployt (v0.7.0).** Weitere Ideen werden
+unten gesammelt, sobald sie konkret werden.
 
 Jeder Branch: kleiner, fokussierter PR; CI muss grün sein; Conventional-Commit-
 Titel (`feat: …`), damit der Release-Workflow den Versions-Bump korrekt ableitet.
