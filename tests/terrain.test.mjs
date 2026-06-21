@@ -68,11 +68,15 @@ test('runSimulation: Wohnzone mit Lage-Bonus bringt mehr Einnahmen', () => {
     const cells = emptyCells();
     for (let x = 3; x <= 8; x++) cells[idx(x, 10)] = road();
     cells[idx(5, 11)] = zone('residential', 3, bonus);
+    // Commercial-Nachbar sorgt dafür, dass canGrow=true → kein Verfall.
+    // neverGrow verhindert zugleich das Hochwachsen, das Level bleibt also 3.
+    cells[idx(6, 11)] = zone('commercial', 3);
     setTaxRate('residential', 0.10);
+    setTaxRate('commercial', 0); // Commercial trägt nichts zur Einnahme bei
     state.money = 50_000;
     const before = state.money;
-    runSimulation(cells, neverGrow); // neverGrow → kein Level-Wechsel
-    return state.money - before; // Netto (Einnahme − Unterhalt), Unterhalt konstant
+    runSimulation(cells, neverGrow);
+    return state.money - before; // Netto (Einnahme − Unterhalt), beides konstant
   }
   const plain = income(1);
   const waterfront = income(1 + WATER_BONUS);
