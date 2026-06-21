@@ -16,8 +16,8 @@ Deployt: **v0.5.0** (`gh-pages`).
 |---|---------|--------|
 | 1 | save-and-ux | ✅ Fertig (PR #2, v0.3.0) |
 | 2 | economy-balance | ✅ Fertig (PR #6, v0.5.0) |
-| 3 | utilities-demand | ⚪ Offen (nur Plan) |
-| 4 | terrain-interaction | 🟡 In Arbeit (Branch `feat/terrain-interaction`) |
+| 3 | utilities-demand | 🟡 In Arbeit (Branch `feat/utilities-demand`) |
+| 4 | terrain-interaction | ✅ Fertig (PR #8) |
 | 5 | version-display | ✅ Fertig (PR #1, v0.2.0) |
 | 6 | map-pipeline | ✅ Fertig (PR #3, v0.4.0); Karte Berlin (PR #4) |
 
@@ -62,7 +62,10 @@ neues `src/core/persistence.js`. **Abhängigkeiten:** keine.
 
 ## 3. `feat/utilities-demand` — Versorgung & Bedarf
 
-**Status:** ⚪ Offen — nur Plan-Doc, noch nicht implementiert.
+**Status:** 🟡 In Arbeit auf `feat/utilities-demand` — Strom-Versorgungs-BFS
+(`src/core/utilities.js`, Kraftwerk-Tool, Kapazitätsgrenze), RCI-Nachfrage als
+Wachstumsfaktor und RCI-Balken im HUD umgesetzt; Persistenz Schema 4. Tests in
+`tests/utilities.test.mjs`. Offen: Commit/PR + grüne CI.
 
 **Ziel:** Klassische SimCity-Tiefe — Zonen brauchen Versorgung und reagieren auf
 Nachfrage.
@@ -83,9 +86,9 @@ Nachfrage.
 
 ## 4. `feat/terrain-interaction` — Terrain-Interaktion
 
-**Status:** 🟡 In Arbeit auf `feat/terrain-interaction` — Kernlogik umgesetzt
-(`src/core/terrain.js`, Verdrahtung in `game.js`/`simulation.js`, Persistenz
-Schema 3). Offen: Tests für `terrain.js` und Commit/PR.
+**Status:** ✅ Fertig — gemergt (PR #8). Hang-Aufschlag, Wasser-/Wald-Lage-Boni,
+Wald-Rodung; `src/core/terrain.js`, Persistenz Schema 3, Tests in
+`tests/terrain.test.mjs`.
 
 **Ziel:** Die echten Geodaten (Höhe, Wasser, Wald) spielerisch nutzen statt nur
 anzuzeigen.
@@ -141,10 +144,9 @@ einen PR. Kein Auto-Merge. Details in
 ## Reihenfolge (Empfehlung)
 
 1. ~~**save-and-ux** zuerst — schafft Abriss, Persistenz und die HUD-Basis.~~ ✅
-2. **economy-balance** ✅ und **terrain-interaction** (🟡 in Arbeit) — unabhängig,
-   parallel möglich.
+2. ~~**economy-balance** und **terrain-interaction** — unabhängig, parallel.~~ ✅
 3. **utilities-demand** zuletzt — größtes Feature, nutzt die HUD-Anzeige aus 1.
-   Einziges noch offenes Feature.
+   🟡 In Arbeit (`feat/utilities-demand`) — letztes Feature der Roadmap.
 
 Jeder Branch: kleiner, fokussierter PR; CI muss grün sein; Conventional-Commit-
 Titel (`feat: …`), damit der Release-Workflow den Versions-Bump korrekt ableitet.

@@ -4,6 +4,31 @@ const GAME_GRID = 64;
 
 function idx(gx, gy) { return gy * GAME_GRID + gx; }
 
+// Generischer BFS-Kern (4er-Nachbarschaft). Startet bei allen `starts`-Indizes
+// und expandiert über jeden Nachbar, für den `passable(index)` true ist.
+// Gibt das Set aller erreichten Zell-Indizes zurück (inkl. Startpunkte).
+// Wird sowohl für das Straßennetz als auch das Versorgungsnetz genutzt.
+export function bfsFlood(starts, passable) {
+  const reached = new Set();
+  const queue = [];
+  for (const s of starts) {
+    if (!reached.has(s)) { reached.add(s); queue.push(s); }
+  }
+  while (queue.length) {
+    const cur = queue.shift();
+    const cx = cur % GAME_GRID, cy = Math.floor(cur / GAME_GRID);
+    for (const [dx, dy] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+      const nx = cx+dx, ny = cy+dy;
+      if (nx < 0 || nx >= GAME_GRID || ny < 0 || ny >= GAME_GRID) continue;
+      const ni = idx(nx, ny);
+      if (reached.has(ni) || !passable(ni)) continue;
+      reached.add(ni);
+      queue.push(ni);
+    }
+  }
+  return reached;
+}
+
 // Gibt ein Set aller Zell-Indizes zurück die über Straßen erreichbar sind.
 // Startpunkt: alle Straßenzellen (zusammenhängende Komponenten werden zusammengeführt).
 export function connectedRoadSet(cells) {

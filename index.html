@@ -26,6 +26,14 @@
     #hud .hud-sep { height: 1px; background: rgba(255,255,255,0.12); margin: 3px 0; }
     #hud-cashflow.pos { color: #7fd87f; }
     #hud-cashflow.neg { color: #e88; }
+    /* RCI-Nachfragebalken */
+    #hud .rci { display: flex; flex-direction: column; gap: 3px; }
+    #hud .rci-row { display: flex; align-items: center; gap: 6px; }
+    #hud .rci-label { flex: 0 0 12px; opacity: 0.8; font-size: 11px; }
+    #hud .rci-track { position: relative; flex: 1; height: 8px; background: rgba(255,255,255,0.10); border-radius: 2px; overflow: hidden; }
+    /* Mittellinie (neutral) */
+    #hud .rci-track::after { content: ''; position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: rgba(255,255,255,0.25); }
+    #hud .rci-fill { position: absolute; top: 0; bottom: 0; left: 50%; width: 0; background: #5cb85c; transition: width .3s, left .3s; }
     #hud .debt { color: #e0a060; }
     #tile-info  { font-size: 11px; opacity: 0.55; margin-top: 2px; }
 
@@ -88,6 +96,7 @@
     #toolbar button[data-tool="commercial"]  { border-left: 3px solid #5b9bd5; }
     #toolbar button[data-tool="industrial"]  { border-left: 3px solid #aaa; }
     #toolbar button[data-tool="admin"]       { border-left: 3px solid #d4a800; }
+    #toolbar button[data-tool="power"]       { border-left: 3px solid #d84a4a; }
     #toolbar button[data-tool="bulldoze"]    { border-left: 3px solid #c0392b; }
 
     #attribution {
@@ -131,6 +140,12 @@
     <div class="row small">
       <span class="label">Straßen</span>
       <span class="value" id="hud-roads">0</span>
+    </div>
+    <div class="hud-sep"></div>
+    <div class="rci">
+      <div class="rci-row"><span class="rci-label">W</span><span class="rci-track"><span class="rci-fill" id="rci-residential"></span></span></div>
+      <div class="rci-row"><span class="rci-label">G</span><span class="rci-track"><span class="rci-fill" id="rci-commercial"></span></span></div>
+      <div class="rci-row"><span class="rci-label">I</span><span class="rci-track"><span class="rci-fill" id="rci-industrial"></span></span></div>
     </div>
     <div id="tile-info">—</div>
   </div>
@@ -185,6 +200,7 @@
     <button data-tool="commercial">Gewerbe <small>1k€</small></button>
     <button data-tool="industrial">Industrie <small>1k€</small></button>
     <button data-tool="admin">Verwaltung <small>1k€</small></button>
+    <button data-tool="power">Kraftwerk <small>5k€</small></button>
     <button data-tool="bulldoze">Abriss</button>
   </div>
 

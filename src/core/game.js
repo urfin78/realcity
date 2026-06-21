@@ -6,6 +6,7 @@ import { runSimulation } from './simulation.js';
 import { isConnected, hasRoadNeighbor } from './network.js';
 import { save, load, clear } from './persistence.js';
 import { slopeCostFactor, isTooSteep, terrainBonus, FOREST_CLEAR_REWARD } from './terrain.js';
+import { computePowered } from './utilities.js';
 
 const LOAN_AMOUNT = 50_000;
 
@@ -44,6 +45,7 @@ const TERRAIN_COLORS = {
 // Zonenfarben nach Level [0..3]
 const ZONE_COLORS = {
   road:        ['#555'],
+  power:       ['#d84a4a'],
   residential: ['#2d6e2d', '#3a9a3a', '#4dbe4d', '#6adf6a'],
   commercial:  ['#1a4a7a', '#2060a0', '#3080c8', '#50a0e8'],
   industrial:  ['#4a4a4a', '#686868', '#888', '#aaa'],
@@ -228,8 +230,24 @@ function updateHUD() {
 
   hudDebt.textContent = Math.round(state.debt).toLocaleString('de-DE') + ' €';
 
+  updateDemandBars();
+
   // Game-Over-Overlay ein-/ausblenden
   gameoverEl.classList.toggle('show', state.gameOver === true);
+}
+
+// RCI-Nachfragebalken: füllt je Zonentyp einen Balken nach rechts (positiv,
+// grün) oder links (negativ, rot) entsprechend state.demand ∈ [-1, 1].
+const RCI_ZONES = ['residential', 'commercial', 'industrial'];
+function updateDemandBars() {
+  for (const z of RCI_ZONES) {
+    const fill = document.getElementById(`rci-${z}`);
+    if (!fill) continue;
+    const d = Math.max(-1, Math.min(1, state.demand?.[z] ?? 0));
+    fill.style.width = `${Math.abs(d) * 50}%`;
+    fill.style.left  = d >= 0 ? '50%' : `${50 - Math.abs(d) * 50}%`;
+    fill.style.background = d >= 0 ? '#5cb85c' : '#c0392b';
+  }
 }
 
 // --- Steuer-Regler: Slider-Position aus dem State spiegeln ---
@@ -417,11 +435,18 @@ let hover = null; // { gx, gy, ok, reason, cost }
 // Wald wird beim Bau gerodet → einmalige Gutschrift verrechnet (senkt die Kosten).
 function buildCost(tool, gx, gy, terrain) {
   const step = (map.grid - 1) / GAME_GRID;
-  const base   = tool === 'road' ? COSTS.road : COSTS.zone;
+  const base   = tool === 'road' ? COSTS.road : (tool === 'power' ? COSTS.power : COSTS.zone);
   const factor = slopeCostFactor(slopeAt((gx + 0.5) * step, (gy + 0.5) * step));
   let cost = Math.round(base * factor);
   if (terrain === 'forest' && !clearedForest.has(cellIdx(gx, gy))) cost -= FOREST_CLEAR_REWARD;
   return cost;
+}
+
+// Basis-Baukosten einer bestehenden Zelle (für die Abriss-Erstattung).
+function refundBase(cell) {
+  if (cell.type === 'road')  return COSTS.road;
+  if (cell.type === 'power') return COSTS.power;
+  return COSTS.zone;
 }
 
 // Bewertet, ob das aktive Werkzeug auf (gx,gy) anwendbar ist.
@@ -434,7 +459,7 @@ function evaluateBuild(gx, gy) {
 
   if (activeTool === 'bulldoze') {
     return cells[i]
-      ? { ok: true,  cost: -Math.round((cells[i].type === 'road' ? COSTS.road : COSTS.zone) * REFUND) }
+      ? { ok: true,  cost: -Math.round(refundBase(cells[i]) * REFUND) }
       : { ok: false, reason: 'leer' };
   }
   if (cells[i]) return { ok: false, reason: 'belegt' };
@@ -443,7 +468,8 @@ function evaluateBuild(gx, gy) {
 
   const cost = buildCost(activeTool, gx, gy, terrain);
 
-  if (activeTool === 'road') {
+  // Straße und Kraftwerk sind Infrastruktur (kein Straßen-Nachbar nötig).
+  if (activeTool === 'road' || activeTool === 'power') {
     return state.money >= cost
       ? { ok: true, cost }
       : { ok: false, reason: 'kein Geld', cost };
@@ -482,7 +508,9 @@ canvas.addEventListener('click', e => {
     if (c) {
       const bonus = c.type === 'zone' && c.terrainBonus > 1
         ? ` (Lage +${Math.round((c.terrainBonus - 1) * 100)} %)` : '';
-      tileInfo.textContent = `[${gx},${gy}] ${c.type === 'road' ? 'Straße' : c.zone} Lv${c.level}${bonus}`;
+      const power = c.type === 'zone' && !computePowered(cells).has(i) ? ' ⚡✗' : '';
+      const name = c.type === 'road' ? 'Straße' : (c.type === 'power' ? 'Kraftwerk' : c.zone);
+      tileInfo.textContent = `[${gx},${gy}] ${name} Lv${c.level}${bonus}${power}`;
     } else {
       const cleared = clearedForest.has(i) ? ' (gerodet)' : '';
       tileInfo.textContent = `[${gx},${gy}] ${terrain}${cleared}`;
@@ -494,8 +522,7 @@ canvas.addEventListener('click', e => {
   if (activeTool === 'bulldoze') {
     const c = cells[i];
     if (!c) { tileInfo.textContent = `[${gx},${gy}] nichts zum Abreißen`; return; }
-    const base = c.type === 'road' ? COSTS.road : COSTS.zone;
-    const refund = Math.round(base * REFUND);
+    const refund = Math.round(refundBase(c) * REFUND);
     cells[i] = null;
     earn(refund);
     tileInfo.textContent = `[${gx},${gy}] abgerissen (+${refund.toLocaleString('de-DE')} €)`;
@@ -521,10 +548,10 @@ canvas.addEventListener('click', e => {
   // Wald wird durch den Bau gerodet (verliert seinen Naherholungs-Bonus).
   const clearsForest = terrain === 'forest' && !clearedForest.has(i);
 
-  if (activeTool === 'road') {
+  if (activeTool === 'road' || activeTool === 'power') {
     if (cost > 0 && !spend(cost)) { tileInfo.textContent = 'Kein Geld!'; return; }
     if (cost <= 0) earn(-cost);
-    cells[i] = { type: 'road', level: 0 };
+    cells[i] = { type: activeTool, level: 0 };
   } else {
     // Zone: muss neben einer Straße liegen
     if (!hasRoadNeighbor(cells, gx, gy)) {
@@ -542,7 +569,9 @@ canvas.addEventListener('click', e => {
   recomputeBonusAround(gx, gy);
 
   const money = cost < 0 ? `+${(-cost).toLocaleString('de-DE')} €` : `-${cost.toLocaleString('de-DE')} €`;
-  const label = activeTool === 'road' ? 'Straße gebaut' : `${activeTool} gesetzt`;
+  const label = activeTool === 'road' ? 'Straße gebaut'
+              : activeTool === 'power' ? 'Kraftwerk gebaut'
+              : `${activeTool} gesetzt`;
   const note  = clearsForest ? ' (Wald gerodet)' : '';
   tileInfo.textContent = `[${gx},${gy}] ${label}${note} (${money})`;
 

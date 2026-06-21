@@ -67,8 +67,9 @@ test('runSimulation: Wohnzone mit Lage-Bonus bringt mehr Einnahmen', () => {
     resetState();
     const cells = emptyCells();
     for (let x = 3; x <= 8; x++) cells[idx(x, 10)] = road();
+    cells[idx(3, 9)] = { type: 'power', level: 0 }; // Strom: sonst Verfall trotz Anbindung
     cells[idx(5, 11)] = zone('residential', 3, bonus);
-    // Commercial-Nachbar sorgt dafür, dass canGrow=true → kein Verfall.
+    // Commercial-Nachbar + Strom sorgen dafür, dass canGrow=true → kein Verfall.
     // neverGrow verhindert zugleich das Hochwachsen, das Level bleibt also 3.
     cells[idx(6, 11)] = zone('commercial', 3);
     setTaxRate('residential', 0.10);
