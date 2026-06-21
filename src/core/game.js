@@ -5,6 +5,7 @@ import { state, spend, earn, startTicks, onTick, applyState, resetState,
 import { runSimulation } from './simulation.js';
 import { isConnected, hasRoadNeighbor } from './network.js';
 import { save, load, clear } from './persistence.js';
+import { slopeCostFactor, isTooSteep, terrainBonus, FOREST_CLEAR_REWARD } from './terrain.js';
 
 const LOAN_AMOUNT = 50_000;
 
@@ -59,6 +60,9 @@ const GAME_GRID = 64;
 let map   = null;
 let cells = null;
 let activeTool = 'inspect';
+// Zell-Indizes gerodeter Wald-Tiles (verlieren den Naherholungs-Bonus, werden
+// als Bauland behandelt). Wird mit dem Spielstand persistiert.
+let clearedForest = new Set();
 
 // --- Kamera ---
 const camera = { x: 64, y: 64, zoom: 4 };
@@ -102,6 +106,70 @@ function terrainAt(fx, fy) {
   if (e < 0.55) return 'flatland';
   if (e < 0.80) return 'hills';
   return 'steep';
+}
+
+// Höhen-Gradient an einer Terrain-Position: größte Höhendifferenz zur
+// Nachbarschaft (ein Spielfeld-Schritt in jede Richtung). 0 = flach.
+function slopeAt(fx, fy) {
+  if (!map) return 0;
+  const g = map.grid;
+  const d = (map.grid - 1) / GAME_GRID; // ein Spielfeld-Schritt in Terrain-Einheiten
+  const e0 = sampleBilinear(map.elevation, g, fx, fy);
+  let max = 0;
+  for (const [dx, dy] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+    const e = sampleBilinear(map.elevation, g, fx + dx*d, fy + dy*d);
+    max = Math.max(max, Math.abs(e - e0));
+  }
+  return max;
+}
+
+// Prüft, ob in einem kleinen Radius (in Spielfeld-Schritten) Wasser bzw.
+// ungerodeter Wald liegt. Gerodete Wald-Tiles sind in clearedForest vermerkt.
+function nearTerrain(gx, gy, kind, radius = 2) {
+  const step = (map.grid - 1) / GAME_GRID;
+  const g = map.grid;
+  for (let dy = -radius; dy <= radius; dy++) {
+    for (let dx = -radius; dx <= radius; dx++) {
+      const fx = (gx + dx + 0.5) * step;
+      const fy = (gy + dy + 0.5) * step;
+      if (kind === 'water' && sampleAny(map.water, g, fx, fy, 1)) return true;
+      if (kind === 'forest' && sampleNearest(map.forest, g, fx, fy)
+          && !clearedForest.has(cellIdx(gx + dx, gy + dy))) return true;
+    }
+  }
+  return false;
+}
+
+// Lage-Bonus einer Zone an (gx,gy): Wasser-/Waldnähe (nur Wohnzonen).
+function bonusFor(zone, gx, gy) {
+  return terrainBonus({
+    zone,
+    nearWater:  nearTerrain(gx, gy, 'water'),
+    nearForest: nearTerrain(gx, gy, 'forest'),
+  });
+}
+
+// Schreibt den aktuellen Lage-Bonus auf eine einzelne Zonen-Zelle.
+function applyBonus(gx, gy) {
+  const c = cells[cellIdx(gx, gy)];
+  if (c?.type === 'zone') c.terrainBonus = bonusFor(c.zone, gx, gy);
+}
+
+// Aktualisiert den Bonus der Zelle selbst und aller Zonen im Bonus-Radius
+// (Rodung/Bebauung kann deren Wald-/Wasserlage verändern).
+function recomputeBonusAround(gx, gy, radius = 2) {
+  for (let dy = -radius; dy <= radius; dy++)
+    for (let dx = -radius; dx <= radius; dx++) {
+      const nx = gx + dx, ny = gy + dy;
+      if (nx >= 0 && nx < GAME_GRID && ny >= 0 && ny < GAME_GRID) applyBonus(nx, ny);
+    }
+}
+
+// Berechnet den Lage-Bonus für alle Zonen neu (z.B. nach dem Laden).
+function recomputeAllBonuses() {
+  if (!cells || !map) return;
+  for (let gy = 0; gy < GAME_GRID; gy++)
+    for (let gx = 0; gx < GAME_GRID; gx++) applyBonus(gx, gy);
 }
 
 // --- Koordinaten ---
@@ -273,10 +341,13 @@ async function loadMap(city) {
     const saved = load(city);
     if (saved) {
       cells = saved.cells;
+      clearedForest = new Set(saved.cleared ?? []);
       applyState(saved.state);
+      recomputeAllBonuses();
       tileInfo.textContent = `${map.name} — Spielstand geladen (Tick ${state.tick})`;
     } else {
       cells = new Array(GAME_GRID * GAME_GRID).fill(null);
+      clearedForest = new Set();
       resetState();
       tileInfo.textContent = `${map.name} geladen`;
     }
@@ -336,18 +407,30 @@ onTick(() => {
 
 // --- Auto-Save (am Tick) ---
 function autoSave() {
-  if (currentCity && cells) save(currentCity, cells, state);
+  if (currentCity && cells) save(currentCity, cells, state, clearedForest);
 }
 
 // --- Bau-Vorschau ---
 let hover = null; // { gx, gy, ok, reason, cost }
+
+// Baukosten eines Werkzeugs auf (gx,gy) inkl. Hang-Aufschlag.
+// Wald wird beim Bau gerodet → einmalige Gutschrift verrechnet (senkt die Kosten).
+function buildCost(tool, gx, gy, terrain) {
+  const step = (map.grid - 1) / GAME_GRID;
+  const base   = tool === 'road' ? COSTS.road : COSTS.zone;
+  const factor = slopeCostFactor(slopeAt((gx + 0.5) * step, (gy + 0.5) * step));
+  let cost = Math.round(base * factor);
+  if (terrain === 'forest' && !clearedForest.has(cellIdx(gx, gy))) cost -= FOREST_CLEAR_REWARD;
+  return cost;
+}
 
 // Bewertet, ob das aktive Werkzeug auf (gx,gy) anwendbar ist.
 function evaluateBuild(gx, gy) {
   if (!cells || activeTool === 'inspect') return null;
   const i = cellIdx(gx, gy);
   const step = (map.grid - 1) / GAME_GRID;
-  const terrain = terrainAt((gx + 0.5) * step, (gy + 0.5) * step);
+  const cx = (gx + 0.5) * step, cy = (gy + 0.5) * step;
+  const terrain = terrainAt(cx, cy);
 
   if (activeTool === 'bulldoze') {
     return cells[i]
@@ -356,17 +439,20 @@ function evaluateBuild(gx, gy) {
   }
   if (cells[i]) return { ok: false, reason: 'belegt' };
   if (terrain === 'water') return { ok: false, reason: 'Wasser' };
+  if (isTooSteep(slopeAt(cx, cy))) return { ok: false, reason: 'zu steil' };
+
+  const cost = buildCost(activeTool, gx, gy, terrain);
 
   if (activeTool === 'road') {
-    return state.money >= COSTS.road
-      ? { ok: true, cost: COSTS.road }
-      : { ok: false, reason: 'kein Geld', cost: COSTS.road };
+    return state.money >= cost
+      ? { ok: true, cost }
+      : { ok: false, reason: 'kein Geld', cost };
   }
   // Zone
-  if (!hasRoadNeighbor(cells, gx, gy)) return { ok: false, reason: 'keine Straße', cost: COSTS.zone };
-  return state.money >= COSTS.zone
-    ? { ok: true, cost: COSTS.zone }
-    : { ok: false, reason: 'kein Geld', cost: COSTS.zone };
+  if (!hasRoadNeighbor(cells, gx, gy)) return { ok: false, reason: 'keine Straße', cost };
+  return state.money >= cost
+    ? { ok: true, cost }
+    : { ok: false, reason: 'kein Geld', cost };
 }
 
 // --- Toolbar ---
@@ -393,9 +479,14 @@ canvas.addEventListener('click', e => {
 
   if (activeTool === 'inspect') {
     const c = cells[i];
-    tileInfo.textContent = c
-      ? `[${gx},${gy}] ${c.type === 'road' ? 'Straße' : c.zone} Lv${c.level}`
-      : `[${gx},${gy}] ${terrain}`;
+    if (c) {
+      const bonus = c.type === 'zone' && c.terrainBonus > 1
+        ? ` (Lage +${Math.round((c.terrainBonus - 1) * 100)} %)` : '';
+      tileInfo.textContent = `[${gx},${gy}] ${c.type === 'road' ? 'Straße' : c.zone} Lv${c.level}${bonus}`;
+    } else {
+      const cleared = clearedForest.has(i) ? ' (gerodet)' : '';
+      tileInfo.textContent = `[${gx},${gy}] ${terrain}${cleared}`;
+    }
     return;
   }
 
@@ -419,21 +510,41 @@ canvas.addEventListener('click', e => {
     tileInfo.textContent = `[${gx},${gy}] Wasser — nicht bebaubar`;
     return;
   }
+  // Sehr steile Hänge sind gesperrt (wie Wasser)
+  if (isTooSteep(slopeAt((gx + 0.5) * step, (gy + 0.5) * step))) {
+    tileInfo.textContent = `[${gx},${gy}] zu steil — nicht bebaubar`;
+    return;
+  }
+
+  // Kosten inkl. Hang-Aufschlag und ggf. Wald-Rodungsgutschrift.
+  const cost = buildCost(activeTool, gx, gy, terrain);
+  // Wald wird durch den Bau gerodet (verliert seinen Naherholungs-Bonus).
+  const clearsForest = terrain === 'forest' && !clearedForest.has(i);
 
   if (activeTool === 'road') {
-    if (!spend(COSTS.road)) { tileInfo.textContent = 'Kein Geld!'; return; }
+    if (cost > 0 && !spend(cost)) { tileInfo.textContent = 'Kein Geld!'; return; }
+    if (cost <= 0) earn(-cost);
     cells[i] = { type: 'road', level: 0 };
-    tileInfo.textContent = `[${gx},${gy}] Straße gebaut (-${COSTS.road.toLocaleString('de-DE')} €)`;
   } else {
     // Zone: muss neben einer Straße liegen
     if (!hasRoadNeighbor(cells, gx, gy)) {
       tileInfo.textContent = `[${gx},${gy}] Zone braucht Straße als Nachbar`;
       return;
     }
-    if (!spend(COSTS.zone)) { tileInfo.textContent = 'Kein Geld!'; return; }
-    cells[i] = { type: 'zone', zone: activeTool, level: 0 };
-    tileInfo.textContent = `[${gx},${gy}] ${activeTool} gesetzt (-${COSTS.zone.toLocaleString('de-DE')} €)`;
+    if (cost > 0 && !spend(cost)) { tileInfo.textContent = 'Kein Geld!'; return; }
+    if (cost <= 0) earn(-cost);
+    cells[i] = { type: 'zone', zone: activeTool, level: 0, terrainBonus: 1 };
   }
+
+  if (clearsForest) clearedForest.add(i);
+  // Lage-Boni neu berechnen: gebaute Zone selbst und Wohnzonen in der
+  // Umgebung (Rodung kann deren Wald-Bonus entfernen).
+  recomputeBonusAround(gx, gy);
+
+  const money = cost < 0 ? `+${(-cost).toLocaleString('de-DE')} €` : `-${cost.toLocaleString('de-DE')} €`;
+  const label = activeTool === 'road' ? 'Straße gebaut' : `${activeTool} gesetzt`;
+  const note  = clearsForest ? ' (Wald gerodet)' : '';
+  tileInfo.textContent = `[${gx},${gy}] ${label}${note} (${money})`;
 
   updateHUD();
   draw();
@@ -455,6 +566,7 @@ function resetCity() {
   if (!currentCity) { tileInfo.textContent = 'Erst eine Stadt laden'; return false; }
   clear(currentCity);
   cells = new Array(GAME_GRID * GAME_GRID).fill(null);
+  clearedForest = new Set();
   resetState();
   lastIncome = 0;
   tileInfo.textContent = `${map?.name ?? currentCity} zurückgesetzt`;
