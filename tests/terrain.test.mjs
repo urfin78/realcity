@@ -76,9 +76,10 @@ test('runSimulation: Wohnzone mit Lage-Bonus bringt mehr Einnahmen', () => {
   }
   const plain = income(1);
   const waterfront = income(1 + WATER_BONUS);
+  // runSimulation rundet den Netto-Cashflow (Math.round) → Toleranz ≤ 1 €.
   const expectedDelta = INCOME.residential * 3 * 0.10 * WATER_BONUS;
   assert.ok(waterfront > plain, 'Lage-Bonus muss die Einnahme erhöhen');
-  assert.ok(Math.abs((waterfront - plain) - expectedDelta) < 1e-6, 'Bonus-Differenz exakt');
+  assert.ok(Math.abs((waterfront - plain) - expectedDelta) <= 1, 'Bonus-Differenz ≈ erwartet');
 });
 
 test('runSimulation: fehlender terrainBonus wird wie 1 behandelt', () => {
