@@ -56,16 +56,20 @@ export function runSimulation(cells, rng = Math.random) {
           continue;
       }
 
-      // Steuer bremst das Wachstum: nur mit Wahrscheinlichkeit growthChance wachsen.
+      // Lage-Bonus (Wasser/Wald, nur Wohnzonen) verstärkt Wachstum und Einnahme.
+      const bonus = cell.terrainBonus ?? 1;
+
+      // Steuer bremst das Wachstum; der Lage-Bonus erhöht die Chance (max 1).
       if (canGrow && cell.level < 3) {
-        if (rng() < growthChance(taxRate)) cell.level++;
+        const chance = Math.min(1, growthChance(taxRate) * bonus);
+        if (rng() < chance) cell.level++;
       } else if (!canGrow && cell.level > 0) {
         cell.level--;
       }
 
       // Einnahmen & Bevölkerung
       if (cell.level > 0) {
-        gross += (INCOME[cell.zone] ?? 0) * cell.level * taxRate;
+        gross += (INCOME[cell.zone] ?? 0) * cell.level * taxRate * bonus;
         if (cell.zone === 'residential') population += 50 * cell.level;
       }
     }

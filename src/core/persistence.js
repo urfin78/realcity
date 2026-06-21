@@ -4,7 +4,7 @@
 // damit sie mit node:test prüfbar sind. save/load kapseln localStorage.
 
 export const GAME_GRID = 64;
-const SCHEMA = 2;          // 2: Wirtschaft (taxRates, debt, brokeTicks, gameOver)
+const SCHEMA = 3;          // 3: Terrain (clearedForest); 2: Wirtschaft
 const KEY_PREFIX = 'realcity:';
 
 const TAX_ZONES = ['residential', 'commercial', 'industrial'];
@@ -22,7 +22,7 @@ function cellCode(cell) {
   return ZONE_CODE[cell.zone] ?? null;
 }
 
-export function serialize(cells, state) {
+export function serialize(cells, state, clearedForest = null) {
   const packed = [];
   for (let i = 0; i < cells.length; i++) {
     const c = cells[i];
@@ -45,6 +45,8 @@ export function serialize(cells, state) {
     brokeTicks: state.brokeTicks ?? 0,
     gameOver: state.gameOver === true,
     cells: packed,
+    // Gerodete Wald-Tiles (Zell-Indizes); leer/null wird weggelassen.
+    cleared: clearedForest ? [...clearedForest] : [],
   });
 }
 
@@ -55,9 +57,9 @@ export function serialize(cells, state) {
  */
 export function deserialize(json) {
   const data = JSON.parse(json); // wirft bei kaputtem JSON
-  // Schema 1 (vor der Wirtschaft) wird weiter akzeptiert; fehlende Felder
-  // bekommen unten Defaults.
-  if (data.schema !== 1 && data.schema !== SCHEMA) throw new Error(`Unbekanntes Schema: ${data.schema}`);
+  // Schema 1 (vor Wirtschaft) und 2 (vor Terrain) bleiben ladbar; fehlende
+  // Felder erhalten unten Defaults.
+  if (![1, 2, SCHEMA].includes(data.schema)) throw new Error(`Unbekanntes Schema: ${data.schema}`);
   if (data.grid !== GAME_GRID) throw new Error(`Grid-Größe ${data.grid} ≠ ${GAME_GRID}`);
   if (!Array.isArray(data.cells)) throw new Error('cells fehlt oder ist kein Array');
 
@@ -80,8 +82,13 @@ export function deserialize(json) {
     taxRates[z] = Number.isFinite(v) ? Math.max(0, Math.min(0.2, v)) : 0.1;
   }
 
+  const cleared = Array.isArray(data.cleared)
+    ? data.cleared.filter(i => Number.isInteger(i) && i >= 0 && i < cells.length)
+    : [];
+
   return {
     cells,
+    cleared,
     state: {
       money:      Number.isFinite(data.money) ? data.money : 100_000,
       population: Number.isFinite(data.population) ? data.population : 0,
@@ -101,11 +108,11 @@ function storage() {
   return (typeof localStorage !== 'undefined') ? localStorage : null;
 }
 
-export function save(city, cells, state) {
+export function save(city, cells, state, clearedForest = null) {
   const s = storage();
   if (!s) return false;
   try {
-    s.setItem(KEY_PREFIX + city, serialize(cells, state));
+    s.setItem(KEY_PREFIX + city, serialize(cells, state, clearedForest));
     return true;
   } catch {
     return false; // Quota überschritten o.ä.
