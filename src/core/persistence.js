@@ -4,8 +4,10 @@
 // damit sie mit node:test prüfbar sind. save/load kapseln localStorage.
 
 export const GAME_GRID = 64;
-const SCHEMA = 1;
+const SCHEMA = 2;          // 2: Wirtschaft (taxRates, debt, brokeTicks, gameOver)
 const KEY_PREFIX = 'realcity:';
+
+const TAX_ZONES = ['residential', 'commercial', 'industrial'];
 
 /**
  * Wandelt Spielzustand in einen kompakten JSON-String.
@@ -29,12 +31,19 @@ export function serialize(cells, state) {
     if (!code) continue;
     packed.push([i, code, c.level | 0]);
   }
+  const taxRates = {};
+  for (const z of TAX_ZONES) taxRates[z] = state.taxRates?.[z] ?? 0.1;
+
   return JSON.stringify({
     schema: SCHEMA,
     grid: GAME_GRID,
     money: state.money,
     population: state.population,
     tick: state.tick,
+    taxRates,
+    debt: state.debt ?? 0,
+    brokeTicks: state.brokeTicks ?? 0,
+    gameOver: state.gameOver === true,
     cells: packed,
   });
 }
@@ -46,7 +55,9 @@ export function serialize(cells, state) {
  */
 export function deserialize(json) {
   const data = JSON.parse(json); // wirft bei kaputtem JSON
-  if (data.schema !== SCHEMA) throw new Error(`Unbekanntes Schema: ${data.schema}`);
+  // Schema 1 (vor der Wirtschaft) wird weiter akzeptiert; fehlende Felder
+  // bekommen unten Defaults.
+  if (data.schema !== 1 && data.schema !== SCHEMA) throw new Error(`Unbekanntes Schema: ${data.schema}`);
   if (data.grid !== GAME_GRID) throw new Error(`Grid-Größe ${data.grid} ≠ ${GAME_GRID}`);
   if (!Array.isArray(data.cells)) throw new Error('cells fehlt oder ist kein Array');
 
@@ -63,12 +74,22 @@ export function deserialize(json) {
     }
   }
 
+  const taxRates = {};
+  for (const z of TAX_ZONES) {
+    const v = data.taxRates?.[z];
+    taxRates[z] = Number.isFinite(v) ? Math.max(0, Math.min(0.2, v)) : 0.1;
+  }
+
   return {
     cells,
     state: {
       money:      Number.isFinite(data.money) ? data.money : 100_000,
       population: Number.isFinite(data.population) ? data.population : 0,
       tick:       Number.isFinite(data.tick) ? data.tick : 0,
+      taxRates,
+      debt:       Number.isFinite(data.debt) ? data.debt : 0,
+      brokeTicks: Number.isFinite(data.brokeTicks) ? data.brokeTicks : 0,
+      gameOver:   data.gameOver === true,
     },
   };
 }
