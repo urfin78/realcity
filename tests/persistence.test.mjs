@@ -36,6 +36,23 @@ test('Round-Trip: serialize → deserialize erhält Zellen und state', () => {
   assert.equal(out[idx(0, 0)], null);
 });
 
+test('Round-Trip: gerodete Wald-Tiles (cleared) bleiben erhalten', () => {
+  const cells = emptyCells();
+  cells[idx(2, 2)] = road();
+  const state = { money: 1_000, population: 0, tick: 1 };
+  const cleared = new Set([idx(2, 2), idx(3, 4)]);
+  const { cleared: out } = deserialize(serialize(cells, state, cleared));
+  assert.deepEqual([...out].sort((a, b) => a - b), [...cleared].sort((a, b) => a - b));
+});
+
+test('deserialize: fehlendes cleared-Feld → leeres Array (Altstand)', () => {
+  const old = JSON.stringify({
+    schema: 2, grid: GAME_GRID, money: 1, population: 0, tick: 0, cells: [],
+  });
+  const { cleared } = deserialize(old);
+  assert.deepEqual(cleared, []);
+});
+
 test('Round-Trip: Wirtschaftsfelder (Steuer, Schulden, Bankrott) bleiben erhalten', () => {
   const cells = emptyCells();
   cells[idx(1, 1)] = road();
