@@ -10,6 +10,24 @@ Ein browserbasierter Städtebauer (SimCity-artig) auf **echtem Terrain**: Höhen
 aus SRTM-Satellitendaten, Wasser und Wald aus OpenStreetMap. Reines Vanilla
 HTML5/JavaScript — **kein npm, kein Node, kein Build-Schritt** zur Laufzeit.
 
+## Spielmechanik
+
+- **Bauen** — Straßen, Wohn-/Gewerbe-/Industrie-/Verwaltungszonen und Kraftwerke;
+  Abriss mit Teil-Erstattung. Bau-Vorschau zeigt Kosten und Baubarkeit.
+- **Zonen-Wachstum** — Zonen wachsen pro Tick, wenn sie an einer Straße liegen,
+  mit Strom versorgt sind und die Nachbarschaft passt (Wohnen ↔ Arbeit).
+- **Wirtschaft** — laufender Unterhalt, Steuersatz-Regler je Zonentyp, Kredit
+  mit Zins/Tilgung, Bankrott bei dauerhaftem Minus.
+- **Terrain** — Hang-Aufschlag beim Bau, Lage-Boni für Wasser-/Waldnähe,
+  Wald-Rodung; sehr steile Hänge und Wasser sind nicht bebaubar.
+- **Versorgung & Bedarf** — Kraftwerke speisen über das Netz verbundene Zonen
+  bis zur Kapazitätsgrenze; die globale RCI-Nachfrage steuert das Wachstum und
+  wird im HUD angezeigt.
+
+Spielstände werden je Stadt automatisch im Browser (`localStorage`) gespeichert.
+
+➡️ **Kurze Schritt-für-Schritt-Anleitung:** [docs/SPIELANLEITUNG.md](docs/SPIELANLEITUNG.md)
+
 ## Spielen
 
 Die jeweils veröffentlichte Version läuft auf GitHub Pages unter
@@ -42,10 +60,15 @@ index.html              Spiel-Einstieg (HUD, Toolbar, Canvas)
 preview.html            Terrain-Vorschau-Werkzeug (Debug)
 src/
   core/                 Spiel-Logik
-    game.js             Render-Loop, Eingabe, Kamera
-    state.js            Budget, Bevölkerung, Tick-System
-    network.js          Straßennetz-Analyse (BFS, Zusammenhang)
+    game.js             Render-Loop, Eingabe, Kamera, HUD/Toolbar
+    state.js            Budget, Bevölkerung, Tick-System, Wirtschaft
+    network.js          Netz-Analyse (BFS, Straßen-Zusammenhang, bfsFlood)
     simulation.js       Zonen-Wachstum pro Tick
+    utilities.js        Stromversorgung (BFS) + RCI-Nachfrage
+    terrain.js          Hang-Aufschlag, Lage-Boni (Wasser/Wald), Rodung
+    persistence.js      Speichern/Laden (localStorage), Serialisierung
+    eventbus.js         Einfacher Event-Bus
+    tilemap.js          Tile-Hilfen
   map/                  Terrain-/Karten-Hilfsmodule
   data/                 Tile-Typen, Farben, Labels
 maps/                   Generierte Spielkarten (*.json) — siehe maps/README.md
